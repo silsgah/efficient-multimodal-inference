@@ -34,3 +34,30 @@ results/raw/
 .DS_Store
 .vscode/
 .idea/
+
+# Research datasets and generated outputs
+/data/docvqa/
+/results/*
+!/results/.gitkeep
+
+# Python and ML caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.cache/
+.venv/
+venv/
+
+# Model and compilation caches
+hf-cache/
+vllm-cache/
+
+# Runtime logs and generated results
+/results/*
+!/results/.gitkeep
+*.log
+
+# Local model and package caches
+.cache/
+hf-cache/
+vllm-cache/
