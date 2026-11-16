@@ -79,4 +79,7 @@ PY
 
 WORKDIR /workspace/projects/efficient-multimodal-inference
 
-# Keep the RunPod container alive and expose its SSH/web-terminal access.\nCOPY docker/runpod-start.sh /start.sh\nRUN chmod 0755 /start.sh\nCMD ["/start.sh"]
+# Keep the RunPod container alive and expose its SSH/web-terminal access.
+COPY docker/runpod-start.sh /start.sh
+RUN chmod 0755 /start.sh
+CMD ["/start.sh"]
