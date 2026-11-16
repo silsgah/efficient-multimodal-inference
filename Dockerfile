@@ -2,7 +2,8 @@ FROM nvidia/cuda:13.2.1-devel-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV VIRTUAL_ENV=/opt/efficient-multimodal-inference-venv
-ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH="${VIRTUAL_ENV}/bin:${CUDA_HOME}/bin:${PATH}"
 
 # Persistent model/data cache lives on the RunPod Network Volume.
 ENV HF_HOME=/workspace/hf-cache
@@ -25,7 +26,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server \
     ca-certificates \
     build-essential \
+    cuda-nvcc-13-2 \
     && rm -rf /var/lib/apt/lists/*
+
+RUN test -x "${CUDA_HOME}/bin/nvcc" \
+    && "${CUDA_HOME}/bin/nvcc" --version
 
 RUN python3.12 -m venv "${VIRTUAL_ENV}" \
     && python -m pip install --no-cache-dir --upgrade pip
