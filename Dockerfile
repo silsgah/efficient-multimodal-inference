@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     git \
     curl \
+    openssh-server \
     ca-certificates \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -78,4 +79,4 @@ PY
 
 WORKDIR /workspace/projects/efficient-multimodal-inference
 
-CMD ["/bin/bash"]
+# Keep the RunPod container alive and expose its SSH/web-terminal access.\nCOPY docker/runpod-start.sh /start.sh\nRUN chmod 0755 /start.sh\nCMD ["/start.sh"]
