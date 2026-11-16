@@ -1,4 +1,4 @@
-FROM nvidia/cuda:13.2.1-runtime-ubuntu24.04
+FROM nvidia/cuda:13.2.1-devel-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV VIRTUAL_ENV=/opt/efficient-multimodal-inference-venv
