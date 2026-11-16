@@ -1,0 +1,37 @@
+engine:
+  name: vllm
+  max_model_len: 8192
+  gpu_memory_utilization: 0.85
+  dtype: auto
+  tensor_parallel_size: 1
+  limit_mm_per_prompt:
+    image: 1
+
+benchmark:
+  warmup_requests: 5
+  measured_requests: 50
+  repetitions: 3
+  random_seed: 42
+
+concurrency:
+  levels:
+    - 1
+    - 2
+    - 4
+    - 8
+
+metrics:
+  latency_percentiles:
+    - 50
+    - 95
+    - 99
+  collect:
+    - time_to_first_token
+    - time_per_output_token
+    - end_to_end_latency
+    - throughput
+    - peak_gpu_memory
+    - gpu_utilization
+    - input_tokens
+    - output_tokens
+    - visual_tokens

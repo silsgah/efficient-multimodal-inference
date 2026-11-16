@@ -1,0 +1,16 @@
+model:
+  id: Qwen/Qwen2.5-VL-3B-Instruct
+  backend: vllm
+  trust_remote_code: false
+
+generation:
+  max_new_tokens: 128
+  temperature: 0.0
+  top_p: 1.0
+  do_sample: false
+
+input:
+  modalities:
+    - image
+    - text
+  max_images_per_request: 1
