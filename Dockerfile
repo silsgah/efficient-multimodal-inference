@@ -45,9 +45,16 @@ RUN python -m pip install --no-cache-dir --no-deps \
     --index-url https://download.pytorch.org/whl/cpu \
     "torchaudio==2.11.0+cpu"
 
+# TorchCodec's CUDA wheel is hosted on the PyTorch CUDA wheel index,
+# not the default PyPI index.
+RUN python -m pip install --no-cache-dir --no-deps \
+    --index-url https://download.pytorch.org/whl/cu132 \
+    --extra-index-url https://pypi.org/simple \
+    "torchcodec==0.17.0+cu132"
+
 # Install every other pinned package from the captured environment.
-# --no-deps prevents pip from replacing the already-installed CUDA builds.
-RUN grep -viE '^(torch|torchvision|torchaudio)==' \
+# --no-deps prevents pip from replacing the already-installed framework builds.
+RUN grep -viE '^(torch|torchvision|torchaudio|torchcodec)==' \
     environment.lock.txt > requirements-pinned.txt \
     && python -m pip install --no-cache-dir --no-deps \
        -r requirements-pinned.txt
