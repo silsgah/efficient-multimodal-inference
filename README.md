@@ -45,6 +45,22 @@ Across 600 measured requests, no requests failed. Throughput increased with conc
 
 Detailed concurrency methodology and interpretation: [Concurrency benchmark report](reports/CONCURRENCY_RESULTS_2026-11-17.md).
 
+### GPU energy and visual-token sweep
+
+On 18 November 2026, GPU board power was sampled with NVML while the same 50-question cohort was evaluated at the three image pixel budgets (150 measured requests per condition).
+
+| Pixel budget | Mean visual tokens/image | Exact match | ANLS-style | Mean latency | Incremental energy/request | Incremental energy/correct generation |
+|---:|---:|---:|---:|---:|---:|---:|
+| 200,704 | 245.08 | 58% | 0.7380 | 282 ms | 4.393 mWh | 7.574 mWh |
+| 401,408 | 484.64 | 66% | 0.7802 | 301 ms | 4.852 mWh | **7.351 mWh** |
+| 802,816 | 998.32 | 74% | 0.79275 | 318 ms | 5.655 mWh | 7.642 mWh |
+
+Energy is an estimate of incremental GPU board energy, not whole-system energy. It is calculated by integrating approximately one-second NVML power samples and subtracting a model-loaded idle baseline measured before and after each workload. Pre/post idle drift and the short 50-question cohort limit the strength of the conclusions. The medium setting has the lowest energy-per-correct point estimate, but the differences are small and do not establish a statistically significant winner.
+
+The energy run at 802,816 pixels produced 37/50 correct answers, compared with 38/50 in the earlier independent resolution run. One substantive answer changed (Bahawalpur to Muzaffarabad on the Army peas-location question). The runs are preserved separately; the original result has not been overwritten.
+
+Detailed methodology, measurement caveats and interpretation: [GPU energy benchmark report](reports/ENERGY_RESULTS_2026-11-18.md). Machine-readable summary: [energy resolution summary](results/energy_measurement_2026-11-18/summary.json).
+
 ## Known measurement limitations
 
 - The concurrency run reports client-observed end-to-end latency; TTFT and TPOT were not separately instrumented.
