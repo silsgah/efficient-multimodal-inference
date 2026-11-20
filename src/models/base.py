@@ -36,6 +36,7 @@ class InferenceRequest:
 @dataclass(frozen=True)
 class InferenceResponse:
     answer: str
+    request_id: str | None = None
     latency_seconds: float
     input_tokens: int | None = None
     output_tokens: int | None = None
