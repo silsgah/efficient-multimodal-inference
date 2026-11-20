@@ -180,6 +180,7 @@ class VLLMBackend(ModelBackend):
 
         return InferenceResponse(
             answer=str(generation.text).strip(),
+            request_id=request.request_id,
             latency_seconds=latency,
             input_tokens=len(prompt_ids) if prompt_ids else None,
             output_tokens=len(output_ids) if output_ids else None,
