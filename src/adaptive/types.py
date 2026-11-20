@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 class AcquisitionAction(str, Enum):
+    FIRST_PASS = "first_pass"
     STOP = "stop"
     FULL_UPSCALE = "full_upscale"
     ROI_CROP = "roi_crop"
@@ -78,6 +79,8 @@ class DecisionContext:
             raise ValueError("question cannot be empty.")
         if self.current_max_pixels <= 0 or self.maximum_max_pixels <= 0:
             raise ValueError("Pixel budgets must be positive.")
+        if self.current_max_pixels % 784 or self.maximum_max_pixels % 784:
+            raise ValueError("Pixel budgets must be multiples of 28 * 28.")
         if self.current_max_pixels > self.maximum_max_pixels:
             raise ValueError("Current pixel budget exceeds the maximum budget.")
         if (
