@@ -45,6 +45,12 @@ Across 600 measured requests, no requests failed. Throughput increased with conc
 
 Detailed concurrency methodology and interpretation: [Concurrency benchmark report](reports/CONCURRENCY_RESULTS_2026-11-17.md).
 
+## Adaptive visual evidence acquisition — research extension
+
+The original resolution, concurrency, visual-token, ROI-pilot, and GPU-energy experiments are preserved as historical baselines. They are not replaced by adaptive-method results. The next research phase develops an energy-aware controller for document-centric visual evidence acquisition.
+
+The working experimental protocol is [METHOD_AND_EXPERIMENT_PROTOCOL.md](docs/METHOD_AND_EXPERIMENT_PROTOCOL.md). It defines the action space, comparison baselines, data split, metrics, energy-measurement constraints, and implementation milestones. The protocol is a draft pending data and evaluation freeze; no adaptive method results are claimed yet.
+
 ### GPU energy and visual-token sweep
 
 On 18 November 2026, GPU board power was sampled with NVML while the same 50-question cohort was evaluated at the three image pixel budgets (150 measured requests per condition).
