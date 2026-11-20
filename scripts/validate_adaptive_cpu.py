@@ -4,8 +4,12 @@ Uses synthetic model outputs and explicitly synthetic action estimates. It does
 not load a VLM, measure energy, or produce research results.
 """
 import json
+import sys
 import tempfile
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 from PIL import Image
 
