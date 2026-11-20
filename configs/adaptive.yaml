@@ -1,0 +1,21 @@
+adaptive:
+  initial_max_pixels: 200704
+  maximum_max_pixels: 802816
+  minimum_pixels: 200704
+  maximum_acquisition_rounds: 1
+
+policy:
+  stop_sufficiency_threshold: 0.85
+  dense_information_threshold: 0.55
+  minimum_expected_quality_gain: 0.02
+  maximum_incremental_energy_mwh: 20.0
+  maximum_incremental_latency_ms: 1500.0
+  energy_penalty_weight: 0.15
+  latency_penalty_weight: 0.15
+  minimum_utility: 0.0
+
+notes:
+  - "Policy thresholds are initial design defaults, not calibrated research findings."
+  - "Action quality-gain and cost estimates must be supplied by a calibrated estimator."
+  - "The dense-information guard vetoes ROI cropping; it does not force escalation."
+  - "GPU energy is not measured per request by the current one-second NVML sampler."
