@@ -97,7 +97,7 @@ class AdaptiveOrchestrator:
             image_path=request.image_path,
             max_pixels=request.initial_max_pixels,
             min_pixels=request.minimum_pixels,
-            action=AcquisitionAction.FULL_UPSCALE,
+            action=AcquisitionAction.FIRST_PASS,
         )
         first_result = self.backend.generate(initial_input)
         signals = self.evidence_analyzer.analyze(
