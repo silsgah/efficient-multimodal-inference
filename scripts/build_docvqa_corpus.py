@@ -458,6 +458,7 @@ def finalize_partitions(
     manifest_path: Path,
     historical_csv: Path,
     revision: str,
+    dataset_id: str = DATASET_ID,
 ) -> dict[str, Any]:
     staging = building_dir / ".staging"
     train_path = staging / "train.jsonl"
@@ -630,7 +631,7 @@ def finalize_partitions(
 
     summary = {
         "schema_version": 1,
-        "dataset_id": DATASET_ID,
+        "dataset_id": dataset_id,
         "dataset_revision": revision,
         "official_test_split_loaded": False,
         "source_question_counts": {
