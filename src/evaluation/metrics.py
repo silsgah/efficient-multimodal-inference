@@ -1,11 +1,16 @@
 """Reference-aligned answer metrics for document VQA.
 
-The ANLS definition follows the public DocVQA evaluation implementation:
+ANLS follows the public DocVQA evaluation implementation:
 case-insensitive strings, character-level Levenshtein distance, normalization
 by the longer string, a strict 0.5 cutoff, and maximum score over references.
 
-No punctuation, number, unit, date, or dotted-initial normalization is applied.
-Those transformations must be separately specified and reported if used.
+Important: the reference ANLS implementation lowercases but does not strip
+leading or trailing whitespace. Exact match is a separate project metric and
+retains its existing case-insensitive, outer-whitespace-trimmed behavior.
+
+No punctuation, number, unit, date, or dotted-initial normalization is applied
+to ANLS. Those transformations must be separately specified and reported if
+used.
 """
 from __future__ import annotations
 
@@ -15,7 +20,15 @@ from collections.abc import Sequence
 DEFAULT_ANLS_THRESHOLD = 0.5
 
 
-def _canonical_text(value: str) -> str:
+def _canonical_anls_text(value: str) -> str:
+    """Match the reference evaluator: lowercase only, without whitespace trim."""
+    if not isinstance(value, str):
+        raise TypeError(f"Expected str, got {type(value).__name__}")
+    return value.lower()
+
+
+def _canonical_exact_match_text(value: str) -> str:
+    """Preserve the project's existing exact-match normalization."""
     if not isinstance(value, str):
         raise TypeError(f"Expected str, got {type(value).__name__}")
     return value.strip().lower()
@@ -47,20 +60,26 @@ def normalized_levenshtein_similarity(
     reference: str,
     threshold: float = DEFAULT_ANLS_THRESHOLD,
 ) -> float:
-    """Return thresholded normalized edit similarity for one reference."""
+    """Return thresholded normalized edit similarity for one reference.
+
+    This mirrors the upstream ANLS formula. The upstream expression is
+    undefined when both strings are empty (division by zero); reject that
+    malformed input explicitly instead of assigning it an invented score.
+    """
     if not 0.0 < threshold <= 1.0:
         raise ValueError("threshold must be in the interval (0, 1].")
 
-    pred = _canonical_text(prediction)
-    ref = _canonical_text(reference)
+    pred = _canonical_anls_text(prediction)
+    ref = _canonical_anls_text(reference)
 
-    if not pred and not ref:
-        return 1.0
-    if not pred or not ref:
-        return 0.0
+    denominator = max(len(pred), len(ref))
+    if denominator == 0:
+        raise ValueError(
+            "ANLS is undefined when both prediction and reference are empty."
+        )
 
     distance = levenshtein_distance(pred, ref)
-    normalized_distance = distance / max(len(pred), len(ref))
+    normalized_distance = distance / denominator
     return 1.0 - normalized_distance if normalized_distance < threshold else 0.0
 
 
@@ -91,8 +110,8 @@ def exact_match_score(prediction: str, references: Sequence[str]) -> float:
     refs = list(references)
     if not refs:
         raise ValueError("At least one reference answer is required.")
-    pred = _canonical_text(prediction)
-    return float(any(pred == _canonical_text(ref) for ref in refs))
+    pred = _canonical_exact_match_text(prediction)
+    return float(any(pred == _canonical_exact_match_text(ref) for ref in refs))
 
 
 def score_answer(
@@ -100,7 +119,7 @@ def score_answer(
     references: Sequence[str],
     threshold: float = DEFAULT_ANLS_THRESHOLD,
 ) -> dict[str, float]:
-    """Compute the two primary answer metrics for one question."""
+    """Compute the project's exact-match metric and reference-aligned ANLS."""
     return {
         "exact_match": exact_match_score(prediction, references),
         "anls": anls_score(prediction, references, threshold),
