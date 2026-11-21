@@ -16,9 +16,16 @@ def test_levenshtein_distance_character_edits():
     assert levenshtein_distance("same", "same") == 0
 
 
-def test_anls_case_insensitive_and_outer_whitespace_only():
-    assert anls_score("  Coca Cola ", ["coca cola"]) == 1.0
+def test_anls_matches_reference_case_normalization_without_trimming():
+    # The upstream evaluator lowercases but retains leading/trailing spaces.
+    assert anls_score("Coca Cola", ["coca cola"]) == 1.0
+    assert anls_score("  Coca Cola ", ["coca cola"]) == pytest.approx(0.75)
     assert anls_score("CocaCola", ["Coca Cola"]) == pytest.approx(8 / 9)
+
+
+def test_anls_dotted_initial_spacing_is_counted_as_an_edit():
+    # One inserted space across five characters gives normalized distance 0.2.
+    assert anls_score("M.D.", ["M. D."]) == pytest.approx(0.8)
 
 
 def test_anls_maximum_over_multiple_references():
@@ -30,9 +37,15 @@ def test_anls_threshold_is_strict():
     assert normalized_levenshtein_similarity("ab", "a") == 0.0
 
 
-def test_anls_empty_answers_are_defined():
-    assert anls_score("", [""]) == 1.0
+def test_anls_empty_prediction_with_nonempty_reference_is_zero():
+    assert anls_score("", ["answer"]) == 0.0
     assert anls_score("answer", [""]) == 0.0
+
+
+def test_anls_rejects_both_empty_like_upstream_undefined_case():
+    # The upstream formula divides by max(len(prediction), len(reference)).
+    with pytest.raises(ValueError, match="both prediction and reference are empty"):
+        anls_score("", [""])
 
 
 def test_anls_rejects_invalid_reference_input():
@@ -42,7 +55,8 @@ def test_anls_rejects_invalid_reference_input():
         anls_score("answer", "answer")
 
 
-def test_exact_match_is_not_punctuation_or_number_normalization():
+def test_exact_match_keeps_its_separate_existing_normalization():
+    assert exact_match_score("  Coca Cola ", ["coca cola"]) == 1.0
     assert exact_match_score("M.D.", ["m.d."]) == 1.0
     assert exact_match_score("M.D.", ["M. D."]) == 0.0
     assert exact_match_score("500", ["500.00"]) == 0.0
