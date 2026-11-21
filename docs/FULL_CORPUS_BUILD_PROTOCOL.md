@@ -32,7 +32,7 @@ Each source image is decoded and canonicalized using the same operation used by 
 
 The question-level records retain every accepted answer in answers; answer is also populated with the first reference for compatibility with the existing benchmark loader. Page-level OCR and source metadata are stored once per unique image in pages.jsonl.
 
-All 50 historical question IDs from the 18 November request CSV are matched to the existing pilot manifest. Their source images are re-canonicalized from the pinned upstream data and must match the historical image-file SHA-256 values exactly. A mismatch stops the build rather than silently changing the historical-development set.
+All 50 historical question IDs from the 18 November request CSV are matched to the existing pilot manifest. Their source images are decoded to RGB and compared using a pixel-content SHA-256 over image dimensions and raw RGB pixels. This is independent of PNG compression settings. A mismatch stops the build rather than silently changing the historical-development set.
 
 When identical canonical page hashes occur under different ucsf_document_id values, those source-document keys are merged into one document group. This prevents a duplicate page from crossing partitions under distinct document IDs.
 
@@ -104,4 +104,4 @@ This is a corpus-preparation artifact, not an experiment result. No policy has b
 
 The locked_evaluation.jsonl must remain untouched by policy training, threshold selection, ROI design, and error-driven iteration. The official test split has not been loaded and remains outside this builder.
 
-The historical image equality check uses byte-level SHA-256 of the canonical RGB PNG, matching the original pilot preparation. If a source image does not match its historical pilot hash, stop and investigate revision/image canonicalization; do not weaken the check or silently remap historical samples.
+Stored PNG artifacts are identified by byte-level SHA-256. Historical image equality is checked with SHA-256 over decoded RGB pixels plus dimensions, so equivalent page pixels do not fail solely because of different PNG compression encoding. If a source image's RGB pixel digest does not match its historical pilot page, stop and investigate revision/image identity; do not weaken the check or silently remap historical samples.
