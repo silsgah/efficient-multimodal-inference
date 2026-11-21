@@ -395,10 +395,12 @@ def process_split(
                         page_meta[image_hash] = {
                             "document_keys": {doc_key},
                             "source_splits": {split},
-                            "ocr_sha256": ocr_hash,\n                            "pixel_sha256": pixel_hash,
+                            "ocr_sha256": ocr_hash,
+                            "pixel_sha256": pixel_hash,
                         }
                         write_jsonl_line(pages_file, {
-                            "image_sha256": image_hash,\n                        "image_pixel_sha256": pixel_hash,\n                            "image_pixel_sha256": pixel_hash,
+                            "image_sha256": image_hash,
+                            "image_pixel_sha256": pixel_hash,
                             "image": image_relpath,
                             "document_keys": [doc_key],
                             "source_splits": [split],
@@ -406,7 +408,11 @@ def process_split(
                             "other_metadata": metadata,
                         })
                     else:
-                        if page_entry["pixel_sha256"] != pixel_hash:\n                            raise RuntimeError(\n                                f"RGB pixel hash differs for canonical page {image_hash}."\n                            )\n                        if page_entry["ocr_sha256"] != ocr_hash:
+                        if page_entry["pixel_sha256"] != pixel_hash:
+                            raise RuntimeError(
+                                f"RGB pixel hash differs for canonical page {image_hash}."
+                            )
+                        if page_entry["ocr_sha256"] != ocr_hash:
                             raise RuntimeError(
                                 f"OCR differs for identical canonical page hash {image_hash}."
                             )
