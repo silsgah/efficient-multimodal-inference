@@ -118,6 +118,7 @@ def main() -> None:
             "first_ocr_line_text": first_line.get("text") if isinstance(first_line, dict) else None,
             "first_ocr_line_bbox": first_line.get("bounding_box") if isinstance(first_line, dict) else None,
         }, ensure_ascii=False, default=str), flush=True)
+        del batch, record, metadata, ocr, ocr_lines, first_line, parquet_file
 
         # Separate image-only read of one row. Reopen the cached Parquet file
         # after the OCR reader so the two column decoders are not live together.
@@ -140,6 +141,7 @@ def main() -> None:
             from PIL import Image
             from io import BytesIO
             with Image.open(BytesIO(image_bytes)) as image:
+                image.load()
                 image_summary["decoded_size"] = list(image.size)
                 image_summary["decoded_mode"] = image.mode
                 image_summary["format"] = image.format
