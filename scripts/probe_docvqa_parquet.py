@@ -34,7 +34,7 @@ def main() -> None:
     args = parser.parse_args()
 
     api = HfApi()
-    info = api.dataset_info(args.dataset_id, repo_type="dataset", revision=args.revision or "main")
+    info = api.dataset_info(args.dataset_id, revision=args.revision or "main")
     revision = args.revision or info.sha
     if not revision:
         raise RuntimeError("Could not resolve immutable Hub commit SHA")
