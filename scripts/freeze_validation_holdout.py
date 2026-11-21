@@ -133,6 +133,17 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def ensure_output_paths_available(paths: list[Path], overwrite: bool = False) -> None:
+    """Prevent accidental replacement of a previously frozen split."""
+    existing = [str(path) for path in paths if path.exists()]
+    if existing and not overwrite:
+        raise FileExistsError(
+            "Refusing to overwrite existing split artifacts: "
+            + ", ".join(existing)
+            + ". Pass --overwrite only when replacement is intentional."
+        )
+
+
 def write_jsonl(path: Path, samples: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as file:
         for sample in samples:
