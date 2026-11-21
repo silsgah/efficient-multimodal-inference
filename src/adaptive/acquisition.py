@@ -16,11 +16,14 @@ class AcquiredInput:
 
 
 class ImageAcquirer:
-    """Materializes a full-image resolution escalation or an ROI crop.
+    """Materialize full-image escalation or an ROI crop.
 
     FULL_UPSCALE retains the original image and raises the processor pixel
-    budget; it does not create an interpolated image file. ROI_CROP writes a
-    new crop file while leaving the source image untouched.
+    budget. ROI_CROP writes a crop without modifying the source image.
+
+    ROI min/max bounds can be configured independently from the full-page
+    escalation bounds. Setting both to the same 28x28 multiple creates a
+    fixed nominal visual-pixel budget for controlled ROI comparisons.
     """
 
     def __init__(
@@ -28,6 +31,8 @@ class ImageAcquirer:
         output_dir: str | Path,
         minimum_pixels: int = 200704,
         upscale_max_pixels: int = 802816,
+        roi_min_pixels: int | None = None,
+        roi_max_pixels: int | None = None,
     ) -> None:
         if minimum_pixels <= 0 or minimum_pixels % 784:
             raise ValueError("minimum_pixels must be a positive multiple of 784.")
@@ -36,9 +41,20 @@ class ImageAcquirer:
         if minimum_pixels > upscale_max_pixels:
             raise ValueError("minimum_pixels cannot exceed upscale_max_pixels.")
 
+        resolved_roi_min = minimum_pixels if roi_min_pixels is None else roi_min_pixels
+        if resolved_roi_min <= 0 or resolved_roi_min % 784:
+            raise ValueError("roi_min_pixels must be a positive multiple of 784.")
+        if roi_max_pixels is not None:
+            if roi_max_pixels <= 0 or roi_max_pixels % 784:
+                raise ValueError("roi_max_pixels must be a positive multiple of 784.")
+            if resolved_roi_min > roi_max_pixels:
+                raise ValueError("roi_min_pixels cannot exceed roi_max_pixels.")
+
         self.output_dir = Path(output_dir)
         self.minimum_pixels = minimum_pixels
         self.upscale_max_pixels = upscale_max_pixels
+        self.roi_min_pixels = resolved_roi_min
+        self.roi_max_pixels = roi_max_pixels
 
     def acquire(
         self,
@@ -75,6 +91,16 @@ class ImageAcquirer:
         if bbox is None:
             raise ValueError("ROI_CROP requires a bounding-box proposal.")
 
+        roi_target_pixels = (
+            min(target_pixels, self.roi_max_pixels)
+            if self.roi_max_pixels is not None
+            else target_pixels
+        )
+        if self.roi_min_pixels > roi_target_pixels:
+            raise ValueError(
+                "ROI pixel bounds are incompatible with the episode maximum."
+            )
+
         try:
             from PIL import Image
         except ImportError as exc:
@@ -102,7 +128,7 @@ class ImageAcquirer:
             request_id=context.request_id,
             question=context.question,
             image_path=crop_path,
-            max_pixels=target_pixels,
-            min_pixels=self.minimum_pixels,
+            max_pixels=roi_target_pixels,
+            min_pixels=self.roi_min_pixels,
             action=action,
         )
