@@ -101,10 +101,14 @@ def main() -> None:
     revision = args.revision or info.sha
     if not revision:
         raise RuntimeError("Could not resolve an immutable dataset revision")
+    # HfApi.dataset_info() returns Hub metadata (DatasetInfo), not the
+    # datasets-library DatasetInfo object that carries split statistics.
+    # Split counts are not needed for this inspection; report the immutable
+    # commit and let the streaming reader validate the actual records.
     print(json.dumps({
         "dataset_id": args.dataset_id,
         "resolved_revision": revision,
-        "splits": {name: getattr(split, "num_examples", None) for name, split in (info.splits or {}).items()},
+        "inspection_mode": "streaming; no rows or images written",
     }, indent=2), flush=True)
 
     for split in ("train", "validation"):
