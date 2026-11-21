@@ -805,6 +805,7 @@ def main() -> None:
             pilot_manifest,
             historical_csv,
             args.revision,
+            dataset_id=args.dataset_id,
         )
 
         # Remove internal staging files only after all integrity checks pass.
