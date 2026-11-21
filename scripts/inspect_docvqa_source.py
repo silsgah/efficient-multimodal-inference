@@ -43,8 +43,25 @@ def inspect_record(record: dict[str, Any], split: str, row_number: int) -> dict[
     if not isinstance(answers, (list, tuple)) or not answers:
         raise ValueError(f"{split} row {row_number}: answers must be a non-empty list")
     image = record["image"]
-    if not isinstance(image, dict) or not (image.get("bytes") or image.get("path")):
-        raise TypeError(f"{split} row {row_number}: unexpected image representation")
+    if isinstance(image, dict):
+        if not (image.get("bytes") or image.get("path")):
+            raise TypeError(f"{split} row {row_number}: image dict has no bytes/path")
+        image_summary = summarize_value(image)
+        image_bytes = len(image["bytes"]) if image.get("bytes") else None
+    else:
+        # Hugging Face Image features may decode directly to PIL.Image.Image.
+        try:
+            from PIL import Image as PILImage
+            is_pil_image = isinstance(image, PILImage.Image)
+        except ImportError:
+            is_pil_image = False
+        if not is_pil_image:
+            raise TypeError(
+                f"{split} row {row_number}: unexpected image representation "
+                f"{type(image).__name__}"
+            )
+        image_summary = f"PIL.Image.Image(size={image.size}, mode={image.mode})"
+        image_bytes = None
     ocr = record["ocr_results"]
     if not isinstance(ocr, dict):
         raise TypeError(f"{split} row {row_number}: ocr_results must be a dict")
@@ -54,8 +71,8 @@ def inspect_record(record: dict[str, Any], split: str, row_number: int) -> dict[
         "source_split": split,
         "question_chars": len(str(record["question"])),
         "accepted_answers": [str(answer) for answer in answers],
-        "image_representation": summarize_value(image),
-        "image_bytes": len(image["bytes"]) if image.get("bytes") else None,
+        "image_representation": image_summary,
+        "image_bytes": image_bytes,
         "document_id": str(metadata["ucsf_document_id"]),
         "document_page_no": str(metadata["ucsf_document_page_no"]),
         "doc_id": metadata.get("doc_id"),
