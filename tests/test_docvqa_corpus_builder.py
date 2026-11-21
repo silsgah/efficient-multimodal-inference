@@ -6,6 +6,7 @@ from PIL import Image
 from scripts.build_docvqa_corpus import (
     UnionFind,
     canonical_png,
+    canonical_pixel_sha256,
     document_key,
     finalize_partitions,
     policy_partition,
@@ -57,6 +58,21 @@ def test_canonical_png_converts_images_to_rgb_and_is_deterministic():
         assert result.mode == "RGB"
         assert result.size == (4, 3)
 
+
+def test_pixel_hash_is_independent_of_png_compression():
+    import io
+
+    image = Image.new("RGB", (7, 5), (123, 45, 67))
+    first_buffer = io.BytesIO()
+    second_buffer = io.BytesIO()
+    image.save(first_buffer, format="PNG", compress_level=1)
+    image.save(second_buffer, format="PNG", compress_level=9)
+
+    first = first_buffer.getvalue()
+    second = second_buffer.getvalue()
+    assert first != second
+    assert canonical_pixel_sha256(first) == canonical_pixel_sha256(second)
+    assert canonical_png(first) == canonical_png(second)
 
 def test_finalize_partitions_enforces_document_and_page_isolation(tmp_path):
     building = tmp_path / "corpus.building"
