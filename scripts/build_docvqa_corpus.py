@@ -262,56 +262,6 @@ def write_page_image(
     return "images/" + name
 
 
-def iter_memory_bounded_rows(parquet_file):
-    """Join one-row metadata/OCR and image scans without co-decoding columns."""
-    metadata_batches = iter(parquet_file.iter_batches(
-        batch_size=1,
-        columns=QUESTION_OCR_COLUMNS,
-        use_threads=False,
-    ))
-    image_batches = iter(parquet_file.iter_batches(
-        batch_size=1,
-        columns=IMAGE_COLUMNS,
-        use_threads=False,
-    ))
-
-    row_index = 0
-    while True:
-        try:
-            metadata_batch = next(metadata_batches)
-        except StopIteration:
-            try:
-                next(image_batches)
-            except StopIteration:
-                return
-            raise RuntimeError("Image Parquet scan contains more rows than metadata scan.")
-
-        try:
-            image_batch = next(image_batches)
-        except StopIteration as exc:
-            raise RuntimeError("Image Parquet scan ended before metadata scan.") from exc
-
-        metadata_rows = metadata_batch.to_pylist()
-        image_rows = image_batch.to_pylist()
-        if len(metadata_rows) != 1 or len(image_rows) != 1:
-            raise RuntimeError("Expected exactly one row from each bounded Parquet scan.")
-
-        row = metadata_rows[0]
-        image_row = image_rows[0]
-        if row.get("question_id") != image_row.get("question_id"):
-            raise RuntimeError(
-                "Parquet column scans are not aligned at row "
-                f"{row_index}: metadata question_id={row.get('question_id')!r}, "
-                f"image question_id={image_row.get('question_id')!r}"
-            )
-        row["image"] = image_row.get("image")
-
-        # Release Arrow RecordBatches before the consumer decodes/canonicalizes
-        # the image bytes and serializes OCR. Only one Python row remains live.
-        del metadata_batch, image_batch, metadata_rows, image_rows, image_row
-        row_index += 1
-        yield row
-
 def process_split(
     split: str,
     shard_names: list[str],
@@ -324,29 +274,38 @@ def process_split(
     union_find: UnionFind,
     page_owner: dict[str, str],
     page_meta: dict[str, dict[str, Any]],
-    raw_to_canonical: dict[str, tuple[str, str, str]],
     seen_question_ids: set[str],
     historical_hashes: dict[str, str],
     historical_ids: set[str],
     shard_records: list[dict[str, Any]],
 ) -> int:
+    """Process each shard in three sequential, disk-staged passes.
+
+    1. Read question/OCR columns only and stage one metadata row at a time.
+    2. Reopen the Parquet file and read the image column only, one image at a
+       time, canonicalizing it immediately. No OCR row is live in this pass.
+    3. Join staged question/OCR rows to the small per-shard image index by ID,
+       then emit compact question records and one OCR record per unique page.
+    """
+    import gc
+
     try:
         import pyarrow.parquet as pq
         from huggingface_hub import hf_hub_download
     except ImportError as exc:
         raise RuntimeError(
-            "Install the isolated data dependencies with "
-            "pip install -r requirements/data.txt"
+            "Install the isolated data dependencies with requirements/data.txt"
         ) from exc
 
     staging_dir = building_dir / ".staging"
     staging_dir.mkdir(parents=True, exist_ok=True)
     staging_path = staging_dir / f"{split}.jsonl"
+    pages_staging_path = staging_dir / "pages.jsonl"
     image_dir = building_dir / "images"
     question_count = 0
 
     with staging_path.open("w", encoding="utf-8") as questions_file, \
-         (staging_dir / "pages.jsonl").open("a", encoding="utf-8") as pages_file:
+         pages_staging_path.open("a", encoding="utf-8") as pages_file:
 
         for shard_index, filename in enumerate(shard_names, start=1):
             print(
@@ -360,62 +319,107 @@ def process_split(
                 revision=revision,
                 cache_dir=str(cache_dir),
             ))
-            shard_rows = 0
             parquet_file = pq.ParquetFile(local_path)
             available = set(parquet_file.schema_arrow.names)
-            missing_columns = set(QUESTION_OCR_COLUMNS + ["image"]) - available
+            missing_columns = set(QUESTION_OCR_COLUMNS + IMAGE_COLUMNS) - available
             if missing_columns:
-                raise ValueError(
-                    f"{filename} missing columns: {sorted(missing_columns)}"
-                )
+                raise ValueError(f"{filename} missing columns: {sorted(missing_columns)}")
 
-            for row in iter_memory_bounded_rows(parquet_file):
-                question_count += 1
-                shard_rows += 1
-                question_id_value = row.get("question_id")
-                if question_id_value is None:
-                    raise ValueError(f"{filename}: missing question_id")
-                sample_id = str(question_id_value)
-                if sample_id in seen_question_ids:
-                    raise ValueError(
-                        f"Duplicate question_id across source data: {sample_id}"
-                    )
-                seen_question_ids.add(sample_id)
+            # Pass A: only lightweight question/answer/document/OCR columns.
+            metadata_stage = staging_dir / f"{split}-{shard_index:02d}.metadata.jsonl"
+            metadata_ids: set[str] = set()
+            metadata_count = 0
+            with metadata_stage.open("w", encoding="utf-8") as metadata_file:
+                for batch in parquet_file.iter_batches(
+                    batch_size=1,
+                    columns=QUESTION_OCR_COLUMNS,
+                    use_threads=False,
+                ):
+                    rows = batch.to_pylist()
+                    if len(rows) != 1:
+                        raise RuntimeError("Metadata scan did not return exactly one row.")
+                    row = rows[0]
+                    question_id_value = row.get("question_id")
+                    if question_id_value is None:
+                        raise ValueError(f"{filename}: missing question_id")
+                    sample_id = str(question_id_value)
+                    if sample_id in seen_question_ids:
+                        raise ValueError(f"Duplicate question_id across source data: {sample_id}")
+                    seen_question_ids.add(sample_id)
+                    metadata_ids.add(sample_id)
 
-                question = row.get("question")
-                if not isinstance(question, str) or not question.strip():
-                    raise ValueError(f"{split}/{sample_id}: invalid question text")
-                answers = row.get("answers")
-                if not isinstance(answers, list) or not answers:
-                    raise ValueError(f"{split}/{sample_id}: missing answer list")
-                answers = [str(answer) for answer in answers]
-                if any(answer == "" for answer in answers):
-                    raise ValueError(f"{split}/{sample_id}: empty reference answer")
+                    question = row.get("question")
+                    if not isinstance(question, str) or not question.strip():
+                        raise ValueError(f"{split}/{sample_id}: invalid question text")
+                    answers = row.get("answers")
+                    if not isinstance(answers, list) or not answers:
+                        raise ValueError(f"{split}/{sample_id}: missing answer list")
+                    answers = [str(answer) for answer in answers]
+                    if any(answer == "" for answer in answers):
+                        raise ValueError(f"{split}/{sample_id}: empty reference answer")
 
-                metadata = row.get("other_metadata")
-                if not isinstance(metadata, dict):
-                    raise ValueError(f"{split}/{sample_id}: invalid other_metadata")
-                doc_key = document_key(metadata)
-                page_no = metadata.get("ucsf_document_page_no")
-                if page_no is None:
-                    raise ValueError(f"{split}/{sample_id}: missing page number")
-                union_find.add(doc_key)
+                    metadata = row.get("other_metadata")
+                    if not isinstance(metadata, dict):
+                        raise ValueError(f"{split}/{sample_id}: invalid other_metadata")
+                    doc_key = document_key(metadata)
+                    page_no = metadata.get("ucsf_document_page_no")
+                    if page_no is None:
+                        raise ValueError(f"{split}/{sample_id}: missing page number")
+                    ocr_results = row.get("ocr_results")
+                    if not isinstance(ocr_results, dict):
+                        raise ValueError(f"{split}/{sample_id}: invalid OCR structure")
 
-                raw_bytes = get_raw_image_bytes(row.get("image"), repo_root)
-                raw_hash = sha256_bytes(raw_bytes)
-                cached = raw_to_canonical.get(raw_hash)
-                if cached is None:
-                    png_bytes, pixel_hash = canonical_image(raw_bytes)
-                    image_hash = sha256_bytes(png_bytes)
-                    image_relpath = write_page_image(
-                        image_dir, image_hash, png_bytes
-                    )
-                    raw_to_canonical[raw_hash] = (
-                        image_hash, image_relpath, pixel_hash
-                    )
-                else:
-                    image_hash, image_relpath, pixel_hash = cached
+                    write_jsonl_line(metadata_file, {
+                        "sample_id": sample_id,
+                        "question_id": question_id_value,
+                        "question": question,
+                        "answers": answers,
+                        "data_split": row.get("data_split"),
+                        "document_key": doc_key,
+                        "ucsf_document_id": str(metadata["ucsf_document_id"]),
+                        "ucsf_document_page_no": str(page_no),
+                        "doc_id": metadata.get("doc_id"),
+                        "other_metadata": metadata,
+                        "ocr_results": ocr_results,
+                    })
+                    metadata_count += 1
+                    question_count += 1
+                    del rows, row, batch
 
+            # Close metadata Parquet reader and encourage release of Arrow buffers
+            # before opening a new reader for image bytes.
+            del parquet_file
+            gc.collect()
+            print(
+                f"[{split}] metadata/OCR pass complete: {metadata_count} rows; "
+                "starting image-only pass",
+                flush=True,
+            )
+
+            # Pass B: image column only. Each page is decoded and written before
+            # the next one is read; no OCR or question objects are resident.
+            image_info_by_question: dict[str, dict[str, str]] = {}
+            image_parquet = pq.ParquetFile(local_path)
+            image_count = 0
+            for batch in image_parquet.iter_batches(
+                batch_size=1,
+                columns=IMAGE_COLUMNS,
+                use_threads=False,
+            ):
+                rows = batch.to_pylist()
+                if len(rows) != 1:
+                    raise RuntimeError("Image scan did not return exactly one row.")
+                image_row = rows[0]
+                sample_id = str(image_row.get("question_id"))
+                if sample_id not in metadata_ids:
+                    raise RuntimeError(f"Image scan returned unexpected question_id {sample_id}")
+                if sample_id in image_info_by_question:
+                    raise RuntimeError(f"Duplicate image row for question_id {sample_id}")
+
+                raw_bytes = get_raw_image_bytes(image_row.get("image"), repo_root)
+                png_bytes, pixel_hash = canonical_image(raw_bytes)
+                image_hash = sha256_bytes(png_bytes)
+                image_relpath = write_page_image(image_dir, image_hash, png_bytes)
                 if split == "validation" and sample_id in historical_ids:
                     expected = historical_hashes[sample_id]
                     if pixel_hash != expected:
@@ -426,75 +430,119 @@ def process_split(
                             "Check dataset revision, image identity, and canonicalization."
                         )
 
-                prior_owner = page_owner.get(image_hash)
-                if prior_owner is None:
-                    page_owner[image_hash] = doc_key
-                elif prior_owner != doc_key:
-                    union_find.union(prior_owner, doc_key)
-
-                ocr_results = row.get("ocr_results")
-                if not isinstance(ocr_results, dict):
-                    raise ValueError(f"{split}/{sample_id}: invalid OCR structure")
-                ocr_hash = json_fingerprint(ocr_results)
-                page_entry = page_meta.get(image_hash)
-                if page_entry is None:
-                    page_meta[image_hash] = {
-                        "document_keys": {doc_key},
-                        "source_splits": {split},
-                        "ocr_sha256": ocr_hash,
-                        "pixel_sha256": pixel_hash,
-                    }
-                    write_jsonl_line(pages_file, {
-                        "image_sha256": image_hash,
-                        "image_pixel_sha256": pixel_hash,
-                        "image": image_relpath,
-                        "document_keys": [doc_key],
-                        "source_splits": [split],
-                        "ocr_results": ocr_results,
-                        "other_metadata": metadata,
-                    })
-                else:
-                    if page_entry["pixel_sha256"] != pixel_hash:
-                        raise RuntimeError(
-                            f"RGB pixel hash differs for canonical page {image_hash}."
-                        )
-                    if page_entry["ocr_sha256"] != ocr_hash:
-                        raise RuntimeError(
-                            f"OCR differs for identical canonical page hash {image_hash}."
-                        )
-                    page_entry["document_keys"].add(doc_key)
-                    page_entry["source_splits"].add(split)
-
-                write_jsonl_line(questions_file, {
-                    "sample_id": sample_id,
-                    "question_id": question_id_value,
-                    "question": question,
-                    "answer": answers[0],
-                    "answers": answers,
-                    "image": image_relpath,
+                image_info_by_question[sample_id] = {
                     "image_sha256": image_hash,
                     "image_pixel_sha256": pixel_hash,
-                    "document_key": doc_key,
-                    "ucsf_document_id": str(metadata["ucsf_document_id"]),
-                    "ucsf_document_page_no": str(page_no),
-                    "doc_id": metadata.get("doc_id"),
-                    "source_split": split,
-                    "data_split": row.get("data_split"),
-                })
+                    "image": image_relpath,
+                }
+                image_count += 1
+                del rows, image_row, raw_bytes, png_bytes, batch
+                if image_count % 100 == 0:
+                    print(
+                        f"[{split}] image-only pass: {image_count}/{metadata_count}",
+                        flush=True,
+                    )
 
-            del parquet_file
+            del image_parquet
+            gc.collect()
+            if image_count != metadata_count or set(image_info_by_question) != metadata_ids:
+                raise RuntimeError(
+                    f"{filename}: metadata rows={metadata_count}, image rows={image_count}; "
+                    "question IDs do not align across the two Parquet scans."
+                )
+            print(
+                f"[{split}] image-only pass complete: {image_count} rows; joining staged metadata",
+                flush=True,
+            )
+
+            # Pass C: join the per-shard staged metadata with the per-shard image
+            # index. Keep only compact image references in memory.
+            with metadata_stage.open(encoding="utf-8") as metadata_file:
+                for line_number, line in enumerate(metadata_file, start=1):
+                    if not line.strip():
+                        continue
+                    record = json.loads(line)
+                    sample_id = record["sample_id"]
+                    image_record = image_info_by_question.pop(sample_id, None)
+                    if image_record is None:
+                        raise RuntimeError(
+                            f"{filename}: missing image record for {sample_id} at metadata line {line_number}"
+                        )
+                    image_hash = image_record["image_sha256"]
+                    pixel_hash = image_record["image_pixel_sha256"]
+                    image_relpath = image_record["image"]
+                    doc_key = record["document_key"]
+                    union_find.add(doc_key)
+
+                    prior_owner = page_owner.get(image_hash)
+                    if prior_owner is None:
+                        page_owner[image_hash] = doc_key
+                    elif prior_owner != doc_key:
+                        union_find.union(prior_owner, doc_key)
+
+                    ocr_results = record["ocr_results"]
+                    ocr_hash = json_fingerprint(ocr_results)
+                    page_entry = page_meta.get(image_hash)
+                    if page_entry is None:
+                        page_meta[image_hash] = {
+                            "document_keys": {doc_key},
+                            "source_splits": {split},
+                            "ocr_sha256": ocr_hash,
+                            "pixel_sha256": pixel_hash,
+                        }
+                        write_jsonl_line(pages_file, {
+                            "image_sha256": image_hash,
+                            "image_pixel_sha256": pixel_hash,
+                            "image": image_relpath,
+                            "document_keys": [doc_key],
+                            "source_splits": [split],
+                            "ocr_results": ocr_results,
+                            "other_metadata": record["other_metadata"],
+                        })
+                    else:
+                        if page_entry["pixel_sha256"] != pixel_hash:
+                            raise RuntimeError(f"RGB pixel hash differs for canonical page {image_hash}.")
+                        if page_entry["ocr_sha256"] != ocr_hash:
+                            raise RuntimeError(f"OCR differs for identical canonical page hash {image_hash}.")
+                        page_entry["document_keys"].add(doc_key)
+                        page_entry["source_splits"].add(split)
+
+                    write_jsonl_line(questions_file, {
+                        "sample_id": sample_id,
+                        "question_id": record["question_id"],
+                        "question": record["question"],
+                        "answer": record["answers"][0],
+                        "answers": record["answers"],
+                        "image": image_relpath,
+                        "image_sha256": image_hash,
+                        "image_pixel_sha256": pixel_hash,
+                        "document_key": doc_key,
+                        "ucsf_document_id": record["ucsf_document_id"],
+                        "ucsf_document_page_no": record["ucsf_document_page_no"],
+                        "doc_id": record["doc_id"],
+                        "source_split": split,
+                        "data_split": record["data_split"],
+                    })
+
+            if image_info_by_question:
+                raise RuntimeError(
+                    f"{filename}: {len(image_info_by_question)} image records were not joined."
+                )
+            metadata_stage.unlink()
             shard_records.append({
                 "source_split": split,
                 "filename": filename,
-                "rows_read": shard_rows,
+                "rows_read": metadata_count,
                 "file_bytes": local_path.stat().st_size,
                 "file_sha256": sha256_file(local_path),
             })
             print(
-                f"[{split}] completed {filename}: {shard_rows} rows "
+                f"[{split}] completed {filename}: {metadata_count} rows "
                 f"(total {question_count})",
                 flush=True,
             )
+            del image_info_by_question, metadata_ids
+            gc.collect()
 
     if question_count != EXPECTED_COUNTS[split]:
         raise ValueError(
