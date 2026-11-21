@@ -79,7 +79,7 @@ def inspect_record(record: dict[str, Any], split: str, row_number: int) -> dict[
         "metadata_keys": sorted(metadata.keys()),
         "ocr_keys": sorted(ocr.keys()),
         "ocr_line_count": len(lines) if isinstance(lines, (list, tuple)) else None,
-        "first_ocr_line": lines[0] if isinstance(lines, (list, tuple)) and lines else None,
+        "first_ocr_line_summary": summarize_value(lines[0]) if isinstance(lines, (list, tuple)) and lines else None,
         "data_split": record["data_split"],
     }
 
@@ -119,7 +119,11 @@ def main() -> None:
             cache_dir=str(args.cache_dir),
             streaming=True,
         )
-        print(f"===== {split.upper()} SAMPLE =====", flush=True)
+        # Crucial for CPU/memory-constrained inspection: do not instantiate PIL
+        # images or trigger image-decoder prefetch threads. We only need image
+        # storage metadata at this stage, not pixel tensors.
+        stream = stream.decode(False)
+        print(f"===== {split.upper()} SAMPLE (IMAGE DECODING DISABLED) =====", flush=True)
         for row_number, record in enumerate(itertools.islice(iter(stream), args.rows_per_split), start=1):
             print(json.dumps(inspect_record(record, split, row_number), ensure_ascii=False, default=str), flush=True)
 
