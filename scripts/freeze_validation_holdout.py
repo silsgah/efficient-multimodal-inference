@@ -156,7 +156,20 @@ def main() -> None:
         type=Path,
         default=Path("publication/rl_data_split_2026-11-21"),
     )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow deliberate replacement of existing split artifacts.",
+    )
     args = parser.parse_args()
+
+    development_path = args.output_dir / "development.jsonl"
+    holdout_path = args.output_dir / "holdout.jsonl"
+    summary_path = args.output_dir / "split_summary.json"
+    ensure_output_paths_available(
+        [development_path, holdout_path, summary_path],
+        overwrite=args.overwrite,
+    )
 
     samples = read_jsonl(args.manifest)
     historical_ids = read_historical_development_ids(args.historical_results)
@@ -174,9 +187,6 @@ def main() -> None:
     )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    development_path = args.output_dir / "development.jsonl"
-    holdout_path = args.output_dir / "holdout.jsonl"
-    summary_path = args.output_dir / "split_summary.json"
 
     write_jsonl(development_path, development)
     write_jsonl(holdout_path, holdout)
