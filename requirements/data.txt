@@ -1,4 +1,4 @@
 # Optional dependencies for streaming and materializing the full DocVQA corpus.
 # Install in an isolated environment; do not add these packages to inference/GPU requirements.
-datasets==5.2.0
+datasets==5.0.1
 Pillow>=10.0,<14.0
