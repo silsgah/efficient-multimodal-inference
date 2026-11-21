@@ -599,14 +599,17 @@ def finalize_partitions(
             pages_per_group[group_id].add(image_hash)
             source_keys_per_group[group_id].add(doc_key)
 
-    group_partition = {}
-    for name in partition_names:
-        for group_id in group_sets[name]:
-            group_partition[group_id] = name
-
     docs_output = building_dir / "documents.jsonl"
     with docs_output.open("w", encoding="utf-8") as file:
         for group_id in sorted(document_question_counts):
+            # A source document may appear in both an exclusion partition and
+            # its retained partition (e.g., train kept for policy learning,
+            # validation copy excluded; historical validation retained while
+            # any train copy is excluded). Preserve every membership instead
+            # of overwriting it with a misleading single partition label.
+            memberships = [
+                name for name in partition_names if group_id in group_sets[name]
+            ]
             write_jsonl_line(file, {
                 "document_group_id": group_id,
                 "source_document_keys": sorted(source_keys_per_group[group_id]),
@@ -614,7 +617,7 @@ def finalize_partitions(
                 "question_counts_by_official_split": dict(
                     document_question_counts[group_id]
                 ),
-                "partition": group_partition.get(group_id, "unassigned"),
+                "partition_memberships": memberships,
             })
 
     # Hash final manifests/artifacts incrementally.
