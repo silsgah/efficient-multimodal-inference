@@ -427,6 +427,7 @@ def process_split(
                         "answers": answers,
                         "image": image_relpath,
                         "image_sha256": image_hash,
+                        "image_pixel_sha256": pixel_hash,
                         "document_key": doc_key,
                         "ucsf_document_id": str(metadata["ucsf_document_id"]),
                         "ucsf_document_page_no": str(page_no),
