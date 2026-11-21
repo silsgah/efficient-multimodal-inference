@@ -34,13 +34,17 @@ def main() -> None:
     args = parser.parse_args()
 
     api = HfApi()
-    info = api.dataset_info(args.dataset_id, revision=args.revision or "main")
-    revision = args.revision or info.sha
+    if args.revision:
+        # The caller already supplied the immutable commit SHA. Avoid an
+        # unnecessary metadata request.
+        revision = args.revision
+    else:
+        revision = api.dataset_info(args.dataset_id, revision="main").sha
     if not revision:
         raise RuntimeError("Could not resolve immutable Hub commit SHA")
 
     files = api.list_repo_files(
-        repo_id=args.dataset_id, repo_type="dataset", revision=revision
+        args.dataset_id, repo_type="dataset", revision=revision
     )
     print(json.dumps({
         "dataset_id": args.dataset_id,
