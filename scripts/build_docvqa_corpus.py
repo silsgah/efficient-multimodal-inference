@@ -885,7 +885,6 @@ def main() -> None:
         union_find = UnionFind()
         page_owner: dict[str, str] = {}
         page_meta: dict[str, dict[str, Any]] = {}
-        raw_to_canonical: dict[str, tuple[str, str]] = {}
         seen_question_ids: set[str] = set()
         shard_records: list[dict[str, Any]] = []
 
@@ -894,7 +893,6 @@ def main() -> None:
             dataset_id=args.dataset_id, revision=args.revision,
             cache_dir=cache_dir, repo_root=repo_root, building_dir=building_dir,
             union_find=union_find, page_owner=page_owner, page_meta=page_meta,
-            raw_to_canonical=raw_to_canonical, seen_question_ids=seen_question_ids,
             historical_hashes=historical_hashes, historical_ids=historical_ids,
             shard_records=shard_records,
         )
@@ -903,7 +901,6 @@ def main() -> None:
             dataset_id=args.dataset_id, revision=args.revision,
             cache_dir=cache_dir, repo_root=repo_root, building_dir=building_dir,
             union_find=union_find, page_owner=page_owner, page_meta=page_meta,
-            raw_to_canonical=raw_to_canonical, seen_question_ids=seen_question_ids,
             historical_hashes=historical_hashes, historical_ids=historical_ids,
             shard_records=shard_records,
         )
