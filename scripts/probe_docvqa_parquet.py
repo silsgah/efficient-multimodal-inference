@@ -77,6 +77,8 @@ def main() -> None:
             raise ValueError(f"{filename} is missing columns: {sorted(missing)}")
 
         print(f"===== {split.upper()} PARQUET =====", flush=True)
+        arrow_schema = parquet_file.schema_arrow
+        image_field = arrow_schema.field("image")
         print(json.dumps({
             "file": filename,
             "local_file": local_path,
@@ -84,25 +86,18 @@ def main() -> None:
             "file_sha256": sha256_file(Path(local_path)),
             "row_count_in_shard": parquet_file.metadata.num_rows,
             "row_group_count": parquet_file.metadata.num_row_groups,
-            "schema": str(parquet_file.schema_arrow),
+            "image_arrow_type": str(image_field.type),
+            "image_field_nullable": image_field.nullable,
+            "schema": str(arrow_schema),
         }, indent=2), flush=True)
 
-        # Read one row with small, explicit columns first. No full row group
-        # or whole-table materialization.
+        # Read one metadata/OCR row only. The image binary column is deliberately
+        # omitted: the Arrow schema above records its representation without
+        # pulling image bytes into Python memory.
         batch = next(parquet_file.iter_batches(
-            batch_size=1, columns=required_columns + ["image"], use_threads=False
+            batch_size=1, columns=required_columns, use_threads=False
         ))
         record = batch.to_pylist()[0]
-        image_cell = record["image"]
-        if isinstance(image_cell, dict):
-            image_summary = {
-                "type": "struct",
-                "keys": sorted(image_cell.keys()),
-                "bytes_length": len(image_cell["bytes"]) if image_cell.get("bytes") else None,
-                "path": image_cell.get("path"),
-            }
-        else:
-            image_summary = {"type": type(image_cell).__name__}
         metadata = record["other_metadata"]
         ocr = record["ocr_results"]
         ocr_lines = ocr.get("lines", []) if isinstance(ocr, dict) else []
@@ -112,7 +107,6 @@ def main() -> None:
             "question": record["question"],
             "answers": record["answers"],
             "data_split": record["data_split"],
-            "image": image_summary,
             "other_metadata": metadata,
             "ocr_keys": sorted(ocr.keys()) if isinstance(ocr, dict) else None,
             "ocr_line_count": len(ocr_lines),
