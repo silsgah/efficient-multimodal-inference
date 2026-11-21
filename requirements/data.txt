@@ -1,4 +1,5 @@
-# Optional dependencies for streaming and materializing the full DocVQA corpus.
-# Install in an isolated environment; do not add these packages to inference/GPU requirements.
-datasets==5.0.1
-Pillow>=10.0,<14.0
+# Minimal dependencies for the pinned, direct-Parquet DocVQA corpus builder.
+# Kept separate from inference/runtime dependencies.
+huggingface_hub==1.33.0
+pyarrow==26.0.1
+Pillow==13.0.0
