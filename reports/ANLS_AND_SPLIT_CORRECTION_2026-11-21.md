@@ -37,6 +37,8 @@ There are 50 unique questions and 150 measured requests per resolution (three re
 
 The corrected reference-aligned ANLS is lower at all three settings. The resolution ranking remains ordered from lowest to highest ANLS as low, medium, high, but the high-resolution result is only slightly above the medium-resolution result (0.770841 versus 0.769369). This difference is descriptive on this 50-question cohort; it is not evidence of a statistically significant advantage.
 
+The final read-only audit reported 450 request rows, 50 unique questions, and 150 question-resolution groups. It found 48 rows whose stored legacy score differed from the recomputed score (48/450 = 10.67%) and zero within-question/repeat inconsistencies. The mismatch count is at row level; the audit output does not separately report the number of unique question-resolution groups affected or break the count down by metric.
+
 The archived values are not overwritten. The corrected values in this addendum are the values to use in new analysis and tables.
 
 ## Corrected energy-per-correct-generation derivation
@@ -81,6 +83,15 @@ Frozen artifacts:
 - `publication/rl_data_split_2026-11-21/split_summary.json`
 
 The split summary records the manifest and historical CSV hashes listed above, the partition sample IDs and counts, and `shared_image_hashes: 0`. The split-generation code refuses to overwrite existing outputs unless explicitly passed `--overwrite`.
+
+
+SHA-256 checksums of the locally frozen output artifacts (computed after generation):
+
+- `development.jsonl`: `bdacc08f32dfa326d5139d8145608dff91dc2094a716e95a877a5e7ec490fc53`
+- `holdout.jsonl`: `4c9cb1fc8ed689f5ebbbd715b439cc59cfe74186ada779e7c20671b7b334a80d`
+- `split_summary.json`: `45c4ad4ce117e4019986dcf958a614ad11aed6b6fae61f5bac282dac641edd37`
+
+These checksums identify the exact files created on the persistent RunPod volume. The JSONL artifacts remain in the local project checkout unless explicitly copied or committed; the checksum record does not imply they have been uploaded to GitHub.
 
 ### Scope limitation
 
