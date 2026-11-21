@@ -18,7 +18,7 @@ How do visual input settings and concurrent multimodal workloads affect inferenc
 
 ## Completed experiments
 
-### Resolution sweep
+### Earlier independent resolution run (preserved separately)
 
 Three pixel budgets were evaluated with 150 measured executions per setting (50 questions repeated three times).
 
@@ -28,7 +28,7 @@ Three pixel budgets were evaluated with 150 measured executions per setting (50 
 | 401,408 | 66% | 0.7802 | 298 ms |
 | 802,816 | 76% | 0.8128 | 309 ms |
 
-The locally implemented ANLS-style score is a project metric, not a claim of an official DocVQA evaluation. Accuracy is calculated over 50 unique questions, not 150 repeated executions.
+The table above is the earlier independent fixed-resolution run. It is distinct from the 18 November energy-measurement run and was not part of the 21 November request-CSV scorer audit. Preserve it as a separate historical experiment; do not combine its metrics with the energy run. Accuracy is calculated over 50 unique questions, not 150 repeated executions.
 
 ### Concurrency sweep
 
@@ -57,13 +57,15 @@ On 18 November 2026, GPU board power was sampled with NVML while the same 50-que
 
 | Pixel budget | Mean visual tokens/image | Exact match | ANLS-style | Mean latency | Incremental energy/request | Incremental energy/correct generation |
 |---:|---:|---:|---:|---:|---:|---:|
-| 200,704 | 245.08 | 58% | 0.7380 | 282 ms | 4.393 mWh | 7.574 mWh |
-| 401,408 | 484.64 | 66% | 0.7802 | 301 ms | 4.852 mWh | **7.351 mWh** |
-| 802,816 | 998.32 | 74% | 0.79275 | 318 ms | 5.655 mWh | 7.642 mWh |
+| 200,704 | 245.08 | 56% (28/50) | 0.725571 | 282 ms | 4.393 mWh | 7.844 mWh |
+| 401,408 | 484.64 | 66% (33/50) | 0.769369 | 301 ms | 4.852 mWh | **7.352 mWh** |
+| 802,816 | 998.32 | 72% (36/50) | 0.770841 | 318 ms | 5.655 mWh | 7.855 mWh |
 
 Energy is an estimate of incremental GPU board energy, not whole-system energy. It is calculated by integrating approximately one-second NVML power samples and subtracting a model-loaded idle baseline measured before and after each workload. Pre/post idle drift and the short 50-question cohort limit the strength of the conclusions. The medium setting has the lowest energy-per-correct point estimate, but the differences are small and do not establish a statistically significant winner.
 
 The energy run at 802,816 pixels produced 37/50 correct answers, compared with 38/50 in the earlier independent resolution run. One substantive answer changed (Bahawalpur to Muzaffarabad on the Army peas-location question). The runs are preserved separately; the original result has not been overwritten.
+**Scoring correction (21 November 2026):** The energy-run ANLS and exact-match columns above have been recomputed using the reference-aligned scorer; the corrected energy-per-correct-generation values use the corrected exact-match counts. The audit processed 450 request rows across 50 unique questions and found 48 stored-score mismatches, with zero within-question/repeat inconsistencies. The historical CSV and GPU telemetry were not rewritten. The reference-aligned ANLS lowercases only; it does not strip whitespace or normalize punctuation/internal spacing. See the [ANLS and split correction addendum](reports/ANLS_AND_SPLIT_CORRECTION_2026-11-21.md) and [full corpus build protocol](docs/FULL_CORPUS_BUILD_PROTOCOL.md).
+
 
 Detailed methodology, measurement caveats and interpretation: [GPU energy benchmark report](reports/ENERGY_RESULTS_2026-11-18.md). Machine-readable summary: [energy resolution summary](results/energy_measurement_2026-11-18/summary.json).
 
