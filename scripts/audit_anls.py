@@ -56,8 +56,8 @@ def main() -> None:
 
         has_legacy_anls = "anls_style" in (reader.fieldnames or [])
         has_legacy_em = "exact_match" in (reader.fieldnames or [])
-
         row_count = 0
+
         for row in reader:
             row_count += 1
             references = parse_references(row["reference"])
@@ -67,6 +67,7 @@ def main() -> None:
                 "request_id": row["request_id"],
                 "budget": row["budget"],
                 "repetition": row["repetition"],
+                "answer": row["answer"],
                 **recomputed,
             }
             question_scores[row["request_id"]].append(record)
@@ -91,51 +92,67 @@ def main() -> None:
             if differences:
                 mismatch_rows.append({**record, **differences})
 
-    unique_question_count = len(question_scores)
-    anls_by_question = []
-    em_by_question = []
+    anls_by_question_resolution = []
+    em_by_question_resolution = []
     repeat_inconsistencies = []
 
     for request_id, records in question_scores.items():
-        # Keep each question separate by resolution: each resolution has its
-        # own answer and score; repetitions are executions, not new questions.
+        # The same question is evaluated at multiple resolutions. Repetitions
+        # are executions, not independent questions.
         by_budget: dict[str, list[dict[str, object]]] = defaultdict(list)
         for record in records:
             by_budget[str(record["budget"])].append(record)
 
         for budget, budget_records in by_budget.items():
-            anls_values = {float(r["anls"]) for r in budget_records}
-            em_values = {float(r["exact_match"]) for r in budget_records}
-            answers_are_stable = len({
-                (str(r["anls"]), str(r["exact_match"])) for r in budget_records
-            }) == 1
-            if not answers_are_stable:
+            answer_set = {str(r["answer"]) for r in budget_records}
+            score_set = {
+                (float(r["anls"]), float(r["exact_match"]))
+                for r in budget_records
+            }
+            if len(answer_set) > 1 or len(score_set) > 1:
                 repeat_inconsistencies.append({
                     "request_id": request_id,
                     "budget": budget,
-                    "records": budget_records,
+                    "answers": sorted(answer_set),
+                    "scores": sorted(score_set),
                 })
-            anls_by_question.append((request_id, budget, sum(anls_values) / len(anls_values)))
-            em_by_question.append((request_id, budget, sum(em_values) / len(em_values)))
+
+            # Average all repetitions for this question, then average questions.
+            anls_by_question_resolution.append((
+                request_id,
+                budget,
+                sum(float(r["anls"]) for r in budget_records) / len(budget_records),
+            ))
+            em_by_question_resolution.append((
+                request_id,
+                budget,
+                sum(float(r["exact_match"]) for r in budget_records)
+                / len(budget_records),
+            ))
 
     print("SCORER: case-insensitive, outer-strip-only DocVQA ANLS")
     print("ANLS cutoff: normalized edit distance strictly below 0.5")
     print("Input:", args.input)
     print("Rows:", row_count)
-    print("Unique questions:", unique_question_count)
-    print("Question-resolution groups:", len(anls_by_question))
+    print("Unique questions:", len(question_scores))
+    print("Question-resolution groups:", len(anls_by_question_resolution))
     print("Stored-score mismatching rows:", len(mismatch_rows))
-    print("Within-question/repeat score inconsistencies:", len(repeat_inconsistencies))
+    print("Within-question/repeat inconsistencies:", len(repeat_inconsistencies))
 
     print("\nRECOMPUTED MEANS BY RESOLUTION")
-    for budget in sorted({budget for _, budget, _ in anls_by_question}, key=int):
-        anls_values = [score for _, b, score in anls_by_question if b == budget]
+    budgets = sorted(
+        {budget for _, budget, _ in anls_by_question_resolution}, key=int
+    )
+    for budget in budgets:
+        anls_values = [
+            score for _, b, score in anls_by_question_resolution if b == budget
+        ]
         em_values = [
-            score for _, b, score in em_by_question if b == budget
+            score for _, b, score in em_by_question_resolution if b == budget
         ]
         print({
             "budget": budget,
-            "questions": len(anls_values),
+            "unique_questions": len(anls_values),
             "anls": round(sum(anls_values) / len(anls_values), 6),
             "exact_match": round(sum(em_values) / len(em_values), 6),
         })
