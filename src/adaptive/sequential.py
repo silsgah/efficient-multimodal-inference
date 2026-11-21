@@ -391,7 +391,11 @@ class SequentialEpisodeRunner:
                 remaining_latency_budget_ms=remaining_latency,
             )
             decision = self.policy.decide(observation, feasible_estimates)
-            steps[-1]["decision_after_step"] = self._decision_to_dict(decision)
+            decision_record = self._decision_to_dict(decision)
+            decision_record["feasible_action_estimates"] = [
+                self._estimate_to_dict(item) for item in feasible_estimates
+            ]
+            steps[-1]["decision_after_step"] = decision_record
 
             if decision.action is AcquisitionAction.STOP:
                 termination_reason = "policy_stop"

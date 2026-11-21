@@ -2,7 +2,7 @@ adaptive:
   initial_max_pixels: 200704
   maximum_max_pixels: 802816
   minimum_pixels: 200704
-  maximum_acquisition_rounds: 2
+  max_acquisition_actions: 2
   # Fixed nominal ROI processor allocation for controlled initial comparisons.
   roi_min_pixels: 200704
   roi_max_pixels: 200704

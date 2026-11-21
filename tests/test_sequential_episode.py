@@ -102,6 +102,28 @@ class FirstFeasiblePolicy:
         )
 
 
+class SequencedEnergyMeter:
+    def __init__(self, energies):
+        self.energies = list(energies)
+
+    def measure(self, operation, *, label):
+        value = operation()
+        energy = self.energies.pop(0)
+        mean_power_w = energy * 3.6 / 0.01
+        measurement = GpuEnergyMeasurement(
+            label=label,
+            energy_mwh=energy,
+            duration_seconds=0.01,
+            mean_power_w=mean_power_w,
+            peak_power_w=mean_power_w,
+            sample_count=2,
+            device_index=0,
+            device_name="fake-gpu",
+            sampling_interval_seconds=0.05,
+        )
+        return value, measurement
+
+
 class FixedEnergyMeter:
     def __init__(self, energy_mwh):
         self.energy_mwh = energy_mwh
@@ -189,6 +211,8 @@ def test_sequential_runner_updates_observation_and_runs_two_acquisitions(tmp_pat
     assert result.termination_reason == "policy_stop"
     assert len(result.steps) == 3
     assert result.trace_path is not None and result.trace_path.is_file()
+    trace = json.loads(result.trace_path.read_text())
+    assert trace["steps"][0]["decision_after_step"]["feasible_action_estimates"]
 
 
 def test_sequential_runner_never_offers_an_action_twice(tmp_path):
@@ -264,3 +288,22 @@ def test_trace_separates_unmeasured_energy_from_estimates(tmp_path):
     assert payload["measured_gpu_energy_mwh"] is None
     assert payload["estimated_acquisition_energy_mwh"] > 0
     assert "unmeasured" in payload["energy_measurement_note"]
+
+
+
+def test_measured_energy_overrun_is_recorded_and_terminates_episode(tmp_path):
+    meter = SequencedEnergyMeter([0.2, 0.5])
+    runner, request, backend, _ = make_runner(
+        tmp_path,
+        FirstFeasiblePolicy(),
+        config=SequentialEpisodeConfig(energy_budget_mwh=0.6),
+        meter=meter,
+        estimator=FakeEstimator(energy_mwh=0.2, latency_ms=10),
+    )
+
+    result = runner.run(request)
+
+    assert len(backend.calls) == 2
+    assert result.measured_gpu_energy_mwh == pytest.approx(0.7)
+    assert result.termination_reason == "energy_budget_exhausted"
+    assert result.budget_exceeded
