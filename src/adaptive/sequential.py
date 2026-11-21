@@ -303,10 +303,9 @@ class SequentialEpisodeRunner:
 
         termination_reason = check_budget()
 
-        while (
-            termination_reason is None
-            and len(acquisition_actions) < self.config.max_acquisition_actions
-        ):
+        # Always make a final policy decision after the last allowed
+        # acquisition so STOP is represented explicitly in the trajectory.
+        while termination_reason is None:
             context = DecisionContext(
                 request_id=request.request_id,
                 question=request.question,
@@ -340,6 +339,8 @@ class SequentialEpisodeRunner:
                 AcquisitionAction.FULL_UPSCALE,
                 AcquisitionAction.ROI_CROP,
             ):
+                if len(acquisition_actions) >= self.config.max_acquisition_actions:
+                    break
                 if action in used_actions:
                     continue
                 if (
