@@ -23,6 +23,8 @@ It writes:
 
 The summary records input file hashes, sample IDs, question counts, image counts and the remaining overlap count. A successful run must report `shared_image_hashes: 0`.
 
+The script refuses to overwrite any of its three output artifacts if they already exist. Use `--overwrite` only when deliberately regenerating a split; retain the previous summary and input hashes when comparing versions.
+
 ## Important scope limitation
 
 This freezes a page-disjoint split of the existing 200-question validation sample only. It does not create the larger policy-training corpus needed for RL and should not be described as the final benchmark evaluation by itself.
