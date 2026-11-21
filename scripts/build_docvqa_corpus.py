@@ -118,16 +118,30 @@ def json_fingerprint(value: Any) -> str:
     return sha256_bytes(encoded)
 
 
-def canonical_png(raw_bytes: bytes) -> bytes:
-    """Match prepare_docvqa.py: decode, convert RGB, and encode PNG."""
+def canonical_image(raw_bytes: bytes) -> tuple[bytes, str]:
+    """Return deterministic RGB-PNG bytes and an encoder-independent pixel hash."""
     from PIL import Image
 
     with Image.open(BytesIO(raw_bytes)) as image:
         image.load()
         converted = image.convert("RGB")
+        width, height = converted.size
+        pixel_digest = hashlib.sha256()
+        pixel_digest.update(f"{width}x{height}:RGB:".encode("ascii"))
+        pixel_digest.update(converted.tobytes())
         buffer = BytesIO()
         converted.save(buffer, format="PNG")
-        return buffer.getvalue()
+        return buffer.getvalue(), pixel_digest.hexdigest()
+
+
+def canonical_png(raw_bytes: bytes) -> bytes:
+    """Match prepare_docvqa.py: decode, convert RGB, and encode PNG."""
+    return canonical_image(raw_bytes)[0]
+
+
+def canonical_pixel_sha256(raw_bytes: bytes) -> str:
+    """Hash decoded RGB pixels and dimensions, independent of PNG compression."""
+    return canonical_image(raw_bytes)[1]
 
 
 def get_raw_image_bytes(image_record: Any, repo_root: Path) -> bytes:
@@ -196,7 +210,7 @@ def read_historical_inputs(
                     f"Cannot resolve pilot image for historical question {sample_id} "
                     f"(manifest line {line_number})."
                 )
-            image_hashes[sample_id] = sha256_file(image_path)
+            image_hashes[sample_id] = canonical_pixel_sha256(image_path.read_bytes())
 
     missing = ids - set(image_hashes)
     if missing:
@@ -259,7 +273,7 @@ def process_split(
     union_find: UnionFind,
     page_owner: dict[str, str],
     page_meta: dict[str, dict[str, Any]],
-    raw_to_canonical: dict[str, tuple[str, str]],
+    raw_to_canonical: dict[str, tuple[str, str, str]],
     seen_question_ids: set[str],
     historical_hashes: dict[str, str],
     historical_ids: set[str],
@@ -345,22 +359,25 @@ def process_split(
                     raw_hash = sha256_bytes(raw_bytes)
                     cached = raw_to_canonical.get(raw_hash)
                     if cached is None:
-                        png_bytes = canonical_png(raw_bytes)
+                        png_bytes, pixel_hash = canonical_image(raw_bytes)
                         image_hash = sha256_bytes(png_bytes)
                         image_relpath = write_page_image(
                             image_dir, image_hash, png_bytes
                         )
-                        raw_to_canonical[raw_hash] = (image_hash, image_relpath)
+                        raw_to_canonical[raw_hash] = (
+                            image_hash, image_relpath, pixel_hash
+                        )
                     else:
-                        image_hash, image_relpath = cached
+                        image_hash, image_relpath, pixel_hash = cached
 
                     if split == "validation" and sample_id in historical_ids:
                         expected = historical_hashes[sample_id]
-                        if image_hash != expected:
+                        if pixel_hash != expected:
                             raise RuntimeError(
-                                f"Historical page hash differs for question {sample_id}: "
-                                f"pilot={expected}, upstream={image_hash}. "
-                                "Check dataset revision or image canonicalization."
+                                f"Historical page pixels differ for question {sample_id}: "
+                                f"pilot_rgb_pixel_sha256={expected}, "
+                                f"upstream_rgb_pixel_sha256={pixel_hash}. "
+                                "Check dataset revision, image identity, and canonicalization."
                             )
 
                     prior_owner = page_owner.get(image_hash)
@@ -378,10 +395,10 @@ def process_split(
                         page_meta[image_hash] = {
                             "document_keys": {doc_key},
                             "source_splits": {split},
-                            "ocr_sha256": ocr_hash,
+                            "ocr_sha256": ocr_hash,\n                            "pixel_sha256": pixel_hash,
                         }
                         write_jsonl_line(pages_file, {
-                            "image_sha256": image_hash,
+                            "image_sha256": image_hash,\n                        "image_pixel_sha256": pixel_hash,\n                            "image_pixel_sha256": pixel_hash,
                             "image": image_relpath,
                             "document_keys": [doc_key],
                             "source_splits": [split],
@@ -389,7 +406,7 @@ def process_split(
                             "other_metadata": metadata,
                         })
                     else:
-                        if page_entry["ocr_sha256"] != ocr_hash:
+                        if page_entry["pixel_sha256"] != pixel_hash:\n                            raise RuntimeError(\n                                f"RGB pixel hash differs for canonical page {image_hash}."\n                            )\n                        if page_entry["ocr_sha256"] != ocr_hash:
                             raise RuntimeError(
                                 f"OCR differs for identical canonical page hash {image_hash}."
                             )
@@ -668,7 +685,7 @@ def finalize_partitions(
         "notes": [
             "All accepted reference answers are preserved in the answers list.",
             "Page OCR/layout is stored once per canonical image in pages.jsonl.",
-            "Images are canonicalized as RGB PNG using the same process as the historical pilot preparation.",
+            "Images are canonicalized as RGB PNG; byte-level PNG hashes identify stored artifacts, while decoded RGB-pixel hashes verify historical page identity independent of PNG compression.",
             "Document groups use ucsf_document_id; identical canonical page hashes across document IDs merge groups.",
             "Historical validation documents are isolated from policy training and locked evaluation.",
             "Validation documents that overlap official train are excluded from locked evaluation.",
