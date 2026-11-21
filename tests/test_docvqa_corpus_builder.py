@@ -157,3 +157,19 @@ def test_finalize_partitions_enforces_document_and_page_isolation(tmp_path):
     assert (building / "pages.jsonl").is_file()
     assert (building / "documents.jsonl").is_file()
 
+    documents = {
+        row["document_group_id"]: row
+        for row in (
+            json.loads(line)
+            for line in (building / "documents.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+    }
+    assert set(documents["group-A"]["partition_memberships"]) == {
+        "historical_development",
+        "historical_overlap_train_excluded",
+    }
+    group_b_memberships = set(documents["group-B"]["partition_memberships"])
+    assert "cross_split_validation_excluded" in group_b_memberships
+    assert len(group_b_memberships & {"policy_train", "policy_validation"}) == 1
+
