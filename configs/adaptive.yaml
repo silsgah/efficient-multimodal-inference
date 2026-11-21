@@ -2,7 +2,13 @@ adaptive:
   initial_max_pixels: 200704
   maximum_max_pixels: 802816
   minimum_pixels: 200704
-  maximum_acquisition_rounds: 1
+  maximum_acquisition_rounds: 2
+  # Fixed nominal ROI processor allocation for controlled initial comparisons.
+  roi_min_pixels: 200704
+  roi_max_pixels: 200704
+  # Null disables that budget guard. Energy budgets require a working NVML meter.
+  energy_budget_mwh: null
+  latency_budget_ms: null
 
 policy:
   stop_sufficiency_threshold: 0.85
@@ -15,7 +21,10 @@ policy:
   minimum_utility: 0.0
 
 notes:
-  - "Policy thresholds are initial design defaults, not calibrated research findings."
-  - "Action quality-gain and cost estimates must be supplied by a calibrated estimator."
-  - "The dense-information guard vetoes ROI cropping; it does not force escalation."
-  - "GPU energy is not measured per request by the current one-second NVML sampler."
+  - "Policy thresholds are engineering defaults, not calibrated research findings."
+  - "Action quality-gain and resource estimates must be calibrated on development data."
+  - "The sequential runner exposes each updated answer and evidence state to the next policy decision."
+  - "Energy estimates are used for action admission; measured energy is separately sampled through NVML."
+  - "NVML reports gross device-level energy, not process-attributed energy; use an otherwise idle GPU."
+  - "Latency and energy guards are pre-action admission checks; an in-flight VLM generation cannot be safely preempted."
+  - "ROI min/max pixels are fixed at 200704 for an initial matched-budget comparison; change only as a declared experiment factor."

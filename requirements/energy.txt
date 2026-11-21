@@ -1,0 +1,3 @@
+# Optional dependency for NVML GPU power sampling.
+# Install only in environments where GPU energy measurement is required.
+nvidia-ml-py>=12.0
