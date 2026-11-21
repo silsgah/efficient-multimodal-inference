@@ -1,5 +1,6 @@
-# Minimal dependencies for the pinned, direct-Parquet DocVQA corpus builder.
+# Minimal dependencies for bounded-memory DocVQA corpus preparation.
 # Kept separate from inference/runtime dependencies.
 huggingface_hub==1.33.0
 pyarrow==26.0.1
 Pillow==13.0.0
+requests>=2.32,<3
