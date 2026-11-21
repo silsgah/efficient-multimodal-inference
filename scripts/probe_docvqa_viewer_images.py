@@ -10,7 +10,7 @@ import argparse
 import hashlib
 import json
 from io import BytesIO
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import requests
 from PIL import Image
@@ -78,6 +78,10 @@ def main() -> None:
         digest = hashlib.sha256(image_bytes).hexdigest()
         with Image.open(BytesIO(image_bytes)) as image:
             image.load()
+            rgb = image.convert("RGB")
+            pixel_digest = hashlib.sha256()
+            pixel_digest.update(f"{rgb.width}x{rgb.height}:RGB:".encode("ascii"))
+            pixel_digest.update(rgb.tobytes())
             result = {
                 "split": split,
                 "question_id": str(row["question_id"]),
@@ -87,11 +91,12 @@ def main() -> None:
                 "page_no": row["other_metadata"].get("ucsf_document_page_no"),
                 "ocr_line_count": len(row["ocr_results"].get("lines", [])),
                 "viewer_endpoint": endpoint_url,
-                "image_url_host": requests.utils.urlparse(image_url).netloc,
+                "image_url_host": urlparse(image_url).netloc,
                 "image_http_status": response.status_code,
                 "image_content_type": response.headers.get("content-type"),
                 "image_bytes": len(image_bytes),
                 "image_sha256": digest,
+                "rgb_pixel_sha256": pixel_digest.hexdigest(),
                 "image_size": list(image.size),
                 "image_mode": image.mode,
                 "image_format": image.format,
