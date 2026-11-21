@@ -18,6 +18,14 @@ DATASET_ID = "pixparse/docvqa-single-page-questions"
 EXPECTED_PREFIXES = {"train": "data/train-", "validation": "data/validation-"}
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-id", default=DATASET_ID)
@@ -73,7 +81,7 @@ def main() -> None:
             "file": filename,
             "local_file": local_path,
             "file_bytes": Path(local_path).stat().st_size,
-            "file_sha256": hashlib.sha256(Path(local_path).read_bytes()).hexdigest(),
+            "file_sha256": sha256_file(Path(local_path)),
             "row_count_in_shard": parquet_file.metadata.num_rows,
             "row_group_count": parquet_file.metadata.num_row_groups,
             "schema": str(parquet_file.schema_arrow),
