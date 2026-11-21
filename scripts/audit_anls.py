@@ -14,6 +14,14 @@ import json
 import math
 from collections import defaultdict
 from pathlib import Path
+import sys
+
+# Direct execution sets sys.path[0] to scripts/, not the repository root.
+# Add the project root explicitly so the documented command works without
+# requiring callers to set PYTHONPATH.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.evaluation.metrics import score_answer
 
@@ -130,7 +138,7 @@ def main() -> None:
                 / len(budget_records),
             ))
 
-    print("SCORER: case-insensitive, outer-strip-only DocVQA ANLS")
+    print("SCORER: reference-aligned DocVQA ANLS (lowercase only; no whitespace trimming)")
     print("ANLS cutoff: normalized edit distance strictly below 0.5")
     print("Input:", args.input)
     print("Rows:", row_count)
