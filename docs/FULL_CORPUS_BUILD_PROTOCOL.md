@@ -26,7 +26,7 @@ ucsf_document_id is the source-document grouping field. doc_id is page-level and
 
 ## 2. Corpus construction
 
-The builder is scripts/build_docvqa_corpus.py. It reads the source Parquet shards directly using PyArrow, in batches of two rows, with threaded decoding disabled. It does not call datasets.load_dataset() and does not load the official test split.
+The builder is scripts/build_docvqa_corpus.py. It reads the source Parquet shards directly using PyArrow, with one-row batches and threaded decoding disabled. It performs separate sequential passes for question/OCR columns and the image column, writing question/OCR metadata to a temporary per-shard JSONL file before reopening the shard for the image-only pass. The streams are joined by question_id, then the metadata staging file is removed. This avoids materializing nested OCR and image-binary columns together. It does not call datasets.load_dataset() and does not load the official test split.
 
 Each source image is decoded and canonicalized using the same operation used by the original pilot preparation: Pillow RGB conversion followed by PNG encoding. SHA-256 is computed over the canonical PNG bytes. The canonical PNG is stored once per unique image hash.
 
@@ -105,3 +105,5 @@ This is a corpus-preparation artifact, not an experiment result. No policy has b
 The locked_evaluation.jsonl must remain untouched by policy training, threshold selection, ROI design, and error-driven iteration. The official test split has not been loaded and remains outside this builder.
 
 Stored PNG artifacts are identified by byte-level SHA-256. Historical image equality is checked with SHA-256 over decoded RGB pixels plus dimensions, so equivalent page pixels do not fail solely because of different PNG compression encoding. If a source image's RGB pixel digest does not match its historical pilot page, stop and investigate revision/image identity; do not weaken the check or silently remap historical samples.
+
+The initial combined image/OCR reader was killed during the first training shard on the CPU Pod. It has been replaced by the sequential disk-staged two-pass reader. Before restarting the full build, the isolated one-row image-only decode check must pass. The original partial `.building` directory is preserved for diagnosis and must not be overwritten or deleted.
