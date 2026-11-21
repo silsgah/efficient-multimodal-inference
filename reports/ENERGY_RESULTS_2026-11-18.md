@@ -1,5 +1,7 @@
 # GPU Energy and Visual-Token Resolution Sweep — 18 November 2026
 
+> **Scoring correction (21 November 2026):** The accuracy figures and derived energy-per-correct-generation values in the original 18 November report below are the values as first calculated and are now superseded. A reference-aligned ANLS audit recomputed the historical request CSV without modifying it. See [the scoring and split correction addendum](ANLS_AND_SPLIT_CORRECTION_2026-11-21.md) for corrected scores, corrected derived efficiency values, input hashes, and the frozen image-disjoint pilot split. The GPU telemetry, measured energy, latency, and visual-token measurements below were not recomputed by this scoring correction.
+
 ## Summary
 
 This experiment measured GPU board power while running the same 50-question DocVQA cohort at three image pixel budgets. Each condition used 5 warm-up requests followed by 150 measured requests (50 unique questions × 3 repetitions). The model was Qwen/Qwen2.5-VL-3B-Instruct served through the project's vLLM backend on one NVIDIA A40.
@@ -35,7 +37,7 @@ Across the lowest and highest budgets, mean merged visual-token count increased 
 
 The 401,408 setting had the lowest point estimate for incremental energy per correct generation (7.351 mWh), compared with 7.574 and 7.642 mWh. These point estimates are close, and the experiment does not establish a statistically significant efficiency winner. Higher resolution improved measured exact match in this cohort, but with higher token consumption and energy per request.
 
-The high-resolution energy run scored 37/50 (74%), whereas the earlier independent high-resolution resolution run scored 38/50 (76%). The two runs differed on one substantive answer: the earlier run answered “Bahawalpur” to the Army peas-location question, while the energy run answered “Muzaffarabad”. A fine-fragrances answer changed wording but failed both exact-match and ANLS-style thresholds in both runs. The scoring audit also found a formatting issue involving “M.D.” versus “M. D.”; the dotted-initial spacing is normalized consistently in the corrected audit. The archived historical results are retained rather than silently rewritten.
+The high-resolution energy run scored 37/50 (74%), whereas the earlier independent high-resolution resolution run scored 38/50 (76%). The two runs differed on one substantive answer: the earlier run answered “Bahawalpur” to the Army peas-location question, while the energy run answered “Muzaffarabad”. A fine-fragrances answer changed wording but failed both exact-match and ANLS-style thresholds in both runs. The subsequent reference-aligned scoring audit found that internal dotted-initial spacing is **not** normalized: “M.D.” and “M. D.” remain distinct character sequences. See the 21 November scoring correction addendum. The archived historical results are retained rather than silently rewritten.
 
 ## Limitations
 
