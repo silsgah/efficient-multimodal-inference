@@ -119,6 +119,33 @@ def main() -> None:
             "first_ocr_line_bbox": first_line.get("bounding_box") if isinstance(first_line, dict) else None,
         }, ensure_ascii=False, default=str), flush=True)
 
+        # Separate image-only read of one row. Reopen the cached Parquet file
+        # after the OCR reader so the two column decoders are not live together.
+        print(f"===== {split.upper()} IMAGE-ONLY ONE-ROW TEST =====", flush=True)
+        image_reader = pq.ParquetFile(local_path)
+        image_batch = next(image_reader.iter_batches(
+            batch_size=1, columns=["question_id", "image"], use_threads=False
+        ))
+        image_row = image_batch.to_pylist()[0]
+        image_cell = image_row["image"]
+        image_bytes = image_cell.get("bytes") if isinstance(image_cell, dict) else None
+        image_path = image_cell.get("path") if isinstance(image_cell, dict) else None
+        image_summary = {
+            "question_id": str(image_row["question_id"]),
+            "image_cell_type": type(image_cell).__name__,
+            "image_bytes_length": len(image_bytes) if image_bytes else None,
+            "image_path": image_path,
+        }
+        if image_bytes:
+            from PIL import Image
+            from io import BytesIO
+            with Image.open(BytesIO(image_bytes)) as image:
+                image_summary["decoded_size"] = list(image.size)
+                image_summary["decoded_mode"] = image.mode
+                image_summary["format"] = image.format
+        print(json.dumps(image_summary, ensure_ascii=False), flush=True)
+        del image_row, image_batch, image_reader, image_bytes
+
 
 if __name__ == "__main__":
     main()
