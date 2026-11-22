@@ -893,6 +893,7 @@ def main() -> None:
             dataset_id=args.dataset_id, revision=args.revision,
             cache_dir=cache_dir, repo_root=repo_root, building_dir=building_dir,
             union_find=union_find, page_owner=page_owner, page_meta=page_meta,
+            seen_question_ids=seen_question_ids,
             historical_hashes=historical_hashes, historical_ids=historical_ids,
             shard_records=shard_records,
         )
@@ -901,6 +902,7 @@ def main() -> None:
             dataset_id=args.dataset_id, revision=args.revision,
             cache_dir=cache_dir, repo_root=repo_root, building_dir=building_dir,
             union_find=union_find, page_owner=page_owner, page_meta=page_meta,
+            seen_question_ids=seen_question_ids,
             historical_hashes=historical_hashes, historical_ids=historical_ids,
             shard_records=shard_records,
         )
