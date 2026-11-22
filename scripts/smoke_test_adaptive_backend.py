@@ -6,6 +6,13 @@ run the adaptive policy, estimate expected quality gain, or measure energy.
 import argparse
 import json
 from pathlib import Path
+import sys
+
+# Executing this file by absolute path puts scripts/ on sys.path, not the repo root.
+# Add the project root explicitly so `src.*` imports work from Jupyter and shell.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from src.adaptive.acquisition import AcquiredInput
 from src.adaptive.types import AcquisitionAction
