@@ -38,6 +38,29 @@ def test_dataset_loads_valid_manifest(tmp_path):
     assert dataset[0].answer == "A document"
 
 
+def test_dataset_resolves_docvqa_repo_relative_image_paths(tmp_path):
+    project = tmp_path / "project"
+    (project / "src").mkdir(parents=True)
+    (project / "configs").mkdir()
+    image = project / "data/docvqa/images/page.png"
+    image.parent.mkdir(parents=True)
+    image.touch()
+    manifest = project / "data/docvqa/manifest.jsonl"
+    manifest.write_text(
+        json.dumps({
+            "sample_id": "docvqa-1",
+            "image": "data/docvqa/images/page.png",
+            "question": "What is the invoice total?",
+            "answer": ["100.00"],
+        }) + "\n",
+        encoding="utf-8",
+    )
+
+    dataset = BenchmarkDataset(manifest)
+
+    assert dataset[0].image == image.resolve()
+
+
 def test_dataset_creates_inference_request(tmp_path):
     manifest, _ = create_dataset(
         tmp_path,
