@@ -41,7 +41,11 @@ def main():
         action=AcquisitionAction.FIRST_PASS,
     )
 
-    backend = VLLMBackend(max_num_seqs=1)
+    # Match the 0.80 A40 memory allocation used by the original VLM smoke test.
+    backend = VLLMBackend(
+        max_num_seqs=1,
+        gpu_memory_utilization=0.80,
+    )
     adapter = VLLMAdaptiveAdapter(
         backend,
         GenerationConfig(max_new_tokens=args.max_new_tokens),
