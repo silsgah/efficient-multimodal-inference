@@ -6,6 +6,13 @@ run the adaptive policy, estimate expected quality gain, or measure energy.
 import argparse
 import json
 from pathlib import Path
+import sys
+
+# Executing this file by absolute path puts scripts/ on sys.path, not the repo root.
+# Add the project root explicitly so `src.*` imports work from Jupyter and shell.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from src.adaptive.acquisition import AcquiredInput
 from src.adaptive.types import AcquisitionAction
@@ -41,7 +48,11 @@ def main():
         action=AcquisitionAction.FIRST_PASS,
     )
 
-    backend = VLLMBackend(max_num_seqs=1)
+    # Match the 0.80 A40 memory allocation used by the original VLM smoke test.
+    backend = VLLMBackend(
+        max_num_seqs=1,
+        gpu_memory_utilization=0.80,
+    )
     adapter = VLLMAdaptiveAdapter(
         backend,
         GenerationConfig(max_new_tokens=args.max_new_tokens),
