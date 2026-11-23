@@ -140,7 +140,7 @@ def fetch_parquet(hf_hub_download, filename: str, cache_dir: Path) -> Path:
         repo_type="dataset",
         revision=REVISION,
         cache_dir=str(cache_dir),
-        local_files_only=filename.startswith("data/train-0000") and int(filename.split("train-")[1].split("-")[0]) < COMPLETED_TRAIN_SHARDS,
+        local_files_only=("/train-" in filename and int(filename.split("train-")[1].split("-")[0]) < COMPLETED_TRAIN_SHARDS),
     )
     return Path(path)
 
@@ -211,7 +211,7 @@ def repair_interrupted_shard(builder, pq, hf_hub_download, repo_root: Path, cach
         if not isinstance(metadata, dict):
             raise RuntimeError(f"Invalid metadata for missing question {qid}")
         answers = row.get("answers")
-        if not isinstance(answers, list) or not answers:
+        if not isinstance(answers, list) or not answers or any(str(a) == "" for a in answers):
             raise RuntimeError(f"Invalid answers for missing question {qid}")
         ocr = row.get("ocr_results")
         if not isinstance(ocr, dict):
