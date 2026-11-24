@@ -176,6 +176,8 @@ def main() -> None:
         line_count = truthy_number(page.get("line_count"))
         initial_answer = str(first.get("answer") or "")
         answer_tokens = tokens(initial_answer)
+        orientation_degrees = truthy_number(page.get("orientation")) % 360.0
+        orientation_radians = math.radians(orientation_degrees)
 
         features = {
             "sample_id": sid,
@@ -199,7 +201,9 @@ def main() -> None:
             "page_words_per_line": word_count / line_count if line_count else 0.0,
             "page_words_per_megapixel": word_count / (pixels / 1e6) if pixels else 0.0,
             "page_lines_per_megapixel": line_count / (pixels / 1e6) if pixels else 0.0,
-            "page_orientation": truthy_number(page.get("orientation")),
+            # Orientation is circular; never use raw degrees as a linear predictor.
+            "page_orientation_sin": math.sin(orientation_radians),
+            "page_orientation_cos": math.cos(orientation_radians),
             "roi_available": int(bool(proposals)),
             "roi_proposal_count": len(proposals),
             "roi_best_bm25_score": bm25_scores[0] if bm25_scores else 0.0,
