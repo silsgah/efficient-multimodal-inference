@@ -151,12 +151,18 @@ carefully controlled repeated measurement protocol.
 
 The inference runners save append-only JSONL records and keep gold labels out
 of the inference process. The corpus is not committed to GitHub; use the
-Hugging Face publisher to archive it in a private dataset repository.
+Hugging Face publisher to archive it in a private dataset repository. The
+publisher creates a sibling staging tree, shards content-addressed image files
+under two-character hash-prefix folders to respect the Hub's per-folder file
+limit, hard-links images rather than making a second local copy, rewrites
+staged JSON/JSONL image paths, and records per-file integrity hashes. The
+original frozen corpus directory remains unchanged. Uploads use the Hub's
+resumable folder upload API and are verified by remote file count and bytes.
 
 ## Data provenance
 
 - Source dataset card: https://huggingface.co/datasets/pixparse/docvqa-single-page-questions
-- Official DocVQA dataset page: https://www.docvqa.org/datasets
+- Official DocVQA dataset page and download terms notice: https://site.docvqa.org/datasets
 - DocVQA paper: https://arxiv.org/abs/2007.00398
 
 The source Hugging Face card declares MIT. The official DocVQA page separately
