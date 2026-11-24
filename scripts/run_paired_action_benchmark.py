@@ -565,9 +565,10 @@ def run_phase(
 
     finally:
         ended = time.monotonic()
-        samples = meter.stop() if meter_ok else []
+        # Keep sampling for the post-workload idle window before stopping NVML.
         if meter_ok:
             time.sleep(10)
+        samples = meter.stop() if meter_ok else []
 
     energy = estimate_phase_energy(samples, started, ended) if meter_ok else {
         "available": False,
