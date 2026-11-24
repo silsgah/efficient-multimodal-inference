@@ -470,9 +470,14 @@ def main() -> None:
         return
 
     try:
+        import hf_xet  # noqa: F401
         from huggingface_hub import HfApi
     except ImportError as exc:
-        raise RuntimeError("huggingface_hub is unavailable in this Python environment.") from exc
+        raise RuntimeError(
+            "The resumable multi-commit uploader requires hf_xet. "
+            "Install it in this data environment with: "
+            "python -m pip install -U huggingface_hub"
+        ) from exc
 
     api = HfApi()
     identity = api.whoami()
