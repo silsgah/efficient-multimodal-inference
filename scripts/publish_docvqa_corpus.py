@@ -211,7 +211,9 @@ def main() -> None:
     identity = api.whoami()
     username = identity.get("name") or identity.get("fullname") or "authenticated account"
     owner = args.repo_id.split("/", 1)[0]
-    organizations = identity.get("auth", {}).get("orgs", [])
+    organizations = identity.get("orgs", [])
+    if not organizations:
+        organizations = identity.get("auth", {}).get("orgs", [])
     org_names = {
         item.get("name") for item in organizations if isinstance(item, dict)
     }
@@ -227,19 +229,37 @@ def main() -> None:
         private=not args.public,
         exist_ok=True,
     )
+    if not args.public:
+        repo_info = api.repo_info(repo_id=args.repo_id, repo_type="dataset")
+        if not getattr(repo_info, "private", False):
+            api.update_repo_settings(
+                repo_id=args.repo_id,
+                repo_type="dataset",
+                private=True,
+            )
 
     manifest_path = root / "ARCHIVE_MANIFEST.json"
     readme_path = root / "README.md"
-    if manifest_path.exists() or readme_path.exists():
-        raise FileExistsError(
-            "README.md or ARCHIVE_MANIFEST.json already exists in corpus root. "
-            "Review existing files; refusing to overwrite."
+    if manifest_path.exists():
+        previous_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        previous_files = previous_manifest.get("files", [])
+        if previous_files != files:
+            raise RuntimeError(
+                "Existing archive manifest does not match current corpus bytes. "
+                "Do not overwrite it; investigate the corpus changes first."
+            )
+        manifest = previous_manifest
+    else:
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
         )
-    manifest_path.write_text(
-        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
-    readme_path.write_text(dataset_card(args.repo_id, manifest), encoding="utf-8")
+    if readme_path.exists():
+        existing_readme = readme_path.read_text(encoding="utf-8")
+        if "DocVQA research corpus" not in existing_readme:
+            raise RuntimeError("Existing README.md is not the expected archive dataset card.")
+    else:
+        readme_path.write_text(dataset_card(args.repo_id, manifest), encoding="utf-8")
 
     try:
         print("[upload] Uploading corpus folder. Re-run after interruption to resume.", flush=True)
@@ -283,7 +303,7 @@ def main() -> None:
             "expected_minimum_remote_bytes": total_bytes,
             "remote_url": f"https://huggingface.co/datasets/{args.repo_id}/tree/main/full_corpus_2026-11-22",
         }
-        report_path = root / "UPLOAD_VERIFICATION.json"
+        report_path = root.parent / (root.name + "_UPLOAD_VERIFICATION.json")
         report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(report, indent=2))
         if report["status"] != "verified":
