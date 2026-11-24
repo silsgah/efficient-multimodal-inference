@@ -270,6 +270,16 @@ def verify_existing_stage(
             raise RuntimeError(f"Unexpected file in staging tree: {relative}")
         if path.stat().st_size != expected[relative]["size_bytes"]:
             raise RuntimeError(f"Staged file size changed: {relative}")
+        if relative.startswith("images/"):
+            source_path = Path(marker.get("source_root", "")) / expected[relative]["source_path"]
+            if not source_path.is_file():
+                raise RuntimeError(f"Original source image is missing: {source_path}")
+            source_stat = source_path.stat()
+            staged_stat = path.stat()
+            if (source_stat.st_dev, source_stat.st_ino) != (staged_stat.st_dev, staged_stat.st_ino):
+                raise RuntimeError(f"Staged image is no longer a hard link: {relative}")
+        elif sha256(path) != expected[relative]["staged_sha256"]:
+            raise RuntimeError(f"Staged metadata file hash changed: {relative}")
     if actual_paths != set(expected):
         raise RuntimeError("Staging tree is incomplete; missing files detected.")
     return marker
@@ -348,15 +358,21 @@ def make_staging(
             staged_bytes += staged_size
             if relative.startswith("images/"):
                 actual_buckets[path.parent.name] += 1
-                if sha256(path) != expected["source_sha256"]:
-                    raise RuntimeError(f"Hard-linked image hash mismatch: {relative}")
+                source_path = root / expected["source_path"]
+                source_stat = source_path.stat()
+                staged_stat = path.stat()
+                if (source_stat.st_dev, source_stat.st_ino) != (staged_stat.st_dev, staged_stat.st_ino):
+                    raise RuntimeError(f"Image staging is not a hard link to the original: {relative}")
+                staged_hash = expected["source_sha256"]
+            else:
+                staged_hash = sha256(path)
 
             staged_entries.append({
                 "path": relative,
                 "source_path": expected["source_path"],
                 "size_bytes": staged_size,
                 "source_sha256": expected["source_sha256"],
-                "staged_sha256": sha256(path),
+                "staged_sha256": staged_hash,
             })
 
         if actual_count != len(files):
@@ -388,6 +404,7 @@ def make_staging(
         (stage / "README.md").write_text(dataset_card(manifest), encoding="utf-8")
 
         marker = {
+            "source_root": str(root),
             "source_fingerprint": fingerprint,
             "path_replacements": path_replacements,
             "bucket_counts": dict(sorted(actual_buckets.items())),
